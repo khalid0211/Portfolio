@@ -281,16 +281,33 @@ def format_currency(amount: float, symbol: str, postfix: str = "", decimals: int
         return "—"
 
 def format_percentage(value: float) -> str:
-    """Format percentage values consistently with 1 decimal place."""
+    """Format percentage values consistently with 2 decimal places."""
     if not is_valid_finite_number(value):
         return "—"
-    return f"{value:.1f}%"
+    return f"{value:.2f}%"
 
 def format_performance_index(value: float) -> str:
     """Format performance indices (CPI, SPI, SPIe) consistently with 2 decimal places."""
     if not is_valid_finite_number(value):
         return "N/A"
     return f"{value:.2f}"
+
+def format_duration(value: float, unit: str = "months") -> str:
+    """Format duration values as rounded integers."""
+    if not is_valid_finite_number(value):
+        return "—"
+    return f"{int(round(value))} {unit}"
+
+def format_date_dmy(date_str: str) -> str:
+    """Format date string to dd-mm-yyyy format."""
+    try:
+        if date_str == 'N/A' or not date_str:
+            return "N/A"
+        # Parse the date and format as dd-mm-yyyy
+        parsed_date = parse_date_any(date_str)
+        return parsed_date.strftime('%d-%m-%Y')
+    except:
+        return date_str  # Return original if parsing fails
 
 def maybe(val, default="—"):
     """Return default if value is None or invalid."""
@@ -395,26 +412,92 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
         total_ac = valid_results['ac'].sum() if 'ac' in valid_results else 0
         total_pv = valid_results['planned_value'].sum() if 'planned_value' in valid_results else 0
         total_ev = valid_results['earned_value'].sum() if 'earned_value' in valid_results else 0
+
+        # Present value calculations - sum the new financial metrics directly
+        total_present_value_progress = valid_results['present_value_progress'].sum() if 'present_value_progress' in valid_results else 0
+        total_planned_value_project = valid_results['planned_value_project'].sum() if 'planned_value_project' in valid_results else 0
+        total_likely_value_project = valid_results['likely_value_project'].sum() if 'likely_value_project' in valid_results else 0
+
+        # Calculate portfolio percentages
+        total_percent_present_value_project = safe_divide(total_planned_value_project, total_bac) * 100 if total_bac > 0 else 0.0
+        total_percent_likely_value_project = safe_divide(total_likely_value_project, total_bac) * 100 if total_bac > 0 else 0.0
+
+        # Calculate Total Planned Present Value (PMT=BAC/OD)
+        total_planned_present_value = 0
+        # Calculate Total Likely Present Value (PMT=BAC/Likely Duration)
+        total_likely_present_value = 0
+
+        # Get the inflation rate from the first row (assuming consistent across portfolio)
+        inflation_rate = valid_results.iloc[0].get('inflation_rate', 5.0) / 100.0 if len(valid_results) > 0 else 0.05
+        monthly_rate = (1 + inflation_rate) ** (1/12) - 1 if inflation_rate > 0 else 0.0  # Correct compound rate conversion
+
+        # Calculate additional present values for each project
+        for _, row in valid_results.iterrows():
+            project_bac = row.get('bac', 0)
+            project_od = row.get('original_duration_months', 0)
+            project_forecast_duration = row.get('forecast_duration', 0)
+
+            # Total Planned Present Value (PMT = BAC/OD)
+            if (is_valid_finite_number(project_bac) and is_valid_finite_number(project_od) and
+                project_bac > 0 and project_od > 0):
+                pmt_planned = project_bac / project_od
+                if monthly_rate > 0:
+                    try:
+                        factor_planned = (1 - (1 + monthly_rate) ** (-project_od)) / monthly_rate
+                        planned_pv = pmt_planned * factor_planned
+                    except (OverflowError, ValueError):
+                        planned_pv = project_bac
+                else:
+                    planned_pv = project_bac
+                total_planned_present_value += planned_pv
+
+            # Total Likely Present Value (PMT = BAC/Likely Duration)
+            if (is_valid_finite_number(project_bac) and is_valid_finite_number(project_forecast_duration) and
+                project_bac > 0 and project_forecast_duration > 0):
+                pmt_likely = project_bac / project_forecast_duration
+                if monthly_rate > 0:
+                    try:
+                        factor_likely = (1 - (1 + monthly_rate) ** (-project_forecast_duration)) / monthly_rate
+                        likely_pv = pmt_likely * factor_likely
+                    except (OverflowError, ValueError):
+                        likely_pv = project_bac
+                else:
+                    likely_pv = project_bac
+                total_likely_present_value += likely_pv
         
         # Portfolio performance indices (correct weighted calculation)
         portfolio_cpi = safe_divide(total_ev, total_ac, 0.0)
         portfolio_spi = safe_divide(total_ev, total_pv, 0.0)
         
-        # Calculate weighted average CPI and SPI (CPI*BAC / Sum BAC, SPI*BAC / Sum BAC)
+        # Calculate weighted averages (CPI*BAC / Sum BAC, SPI*BAC / Sum BAC)
         total_cpi_weighted = 0
         total_spi_weighted = 0
+
+        # Calculate % Time Used using correct formula: Sum(AD * BAC) / Sum(OD * BAC)
+        total_ad_bac = 0  # Sum of Actual Duration * BAC
+        total_od_bac = 0  # Sum of Original Duration * BAC
+
         for _, row in valid_results.iterrows():
             project_bac = row.get('bac', 0)
             project_cpi = row.get('cost_performance_index', 0)
             project_spi = row.get('schedule_performance_index', 0)
-            
+            project_ad = row.get('actual_duration_months', 0)
+            project_od = row.get('original_duration_months', 0)
+
             if is_valid_finite_number(project_cpi) and is_valid_finite_number(project_bac) and project_bac > 0:
                 total_cpi_weighted += project_cpi * project_bac
             if is_valid_finite_number(project_spi) and is_valid_finite_number(project_bac) and project_bac > 0:
                 total_spi_weighted += project_spi * project_bac
-        
+
+            # Calculate time used components
+            if (is_valid_finite_number(project_ad) and is_valid_finite_number(project_od) and
+                is_valid_finite_number(project_bac) and project_bac > 0 and project_od > 0):
+                total_ad_bac += project_ad * project_bac
+                total_od_bac += project_od * project_bac
+
         weighted_avg_cpi = safe_divide(total_cpi_weighted, total_bac, 0.0)
         weighted_avg_spi = safe_divide(total_spi_weighted, total_bac, 0.0)
+        weighted_avg_time_used = safe_divide(total_ad_bac, total_od_bac, 0.0) * 100  # Convert to percentage
         
         # Performance quadrant analysis
         quadrants = {
@@ -468,15 +551,23 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
             'total_ac': total_ac,
             'total_pv': total_pv,
             'total_ev': total_ev,
+            'total_present_value_progress': total_present_value_progress,
+            'total_planned_value_project': total_planned_value_project,
+            'total_likely_value_project': total_likely_value_project,
+            'total_percent_present_value_project': total_percent_present_value_project,
+            'total_percent_likely_value_project': total_percent_likely_value_project,
+            'total_planned_present_value': total_planned_present_value,
+            'total_likely_present_value': total_likely_present_value,
             'portfolio_cpi': portfolio_cpi,
             'portfolio_spi': portfolio_spi,
             'weighted_avg_cpi': weighted_avg_cpi,
             'weighted_avg_spi': weighted_avg_spi,
+            'weighted_avg_time_used': weighted_avg_time_used,
             'quadrants': quadrants,
             'quadrant_percentages': quadrant_percentages,
             'quadrant_budgets': quadrant_budgets,
             'budget_percentages': budget_percentages,
-            'average_progress': valid_results['percent_complete'].mean() if 'percent_complete' in valid_results else 0
+            'average_progress': safe_divide(total_ev, total_bac) * 100
         }
     
     except Exception as e:
@@ -955,8 +1046,8 @@ def calculate_present_value(ac, duration_months, annual_inflation_rate) -> float
         
         if annual_inflation_rate == 0 or duration_months == 0:
             return round(ac, 2)
-            
-        monthly_rate = annual_inflation_rate / 12.0
+
+        monthly_rate = (1 + annual_inflation_rate) ** (1/12) - 1  # Correct compound rate conversion
         pmt = ac / max(duration_months, 1e-9)
         
         try:
@@ -968,6 +1059,84 @@ def calculate_present_value(ac, duration_months, annual_inflation_rate) -> float
             
     except ValueError as e:
         logger.error(f"Present value calculation failed: {e}")
+        return 0.0
+
+def calculate_present_value_of_progress(ac, ad, annual_inflation_rate) -> float:
+    """Calculate Present Value of Progress: (AC / AD) * (1-(1+r)^(-AD))/r where r = (1+inflation_rate)^(1/12)"""
+    try:
+        ac = validate_numeric_input(ac, "AC", min_val=0.0)
+        ad = validate_numeric_input(ad, "AD", min_val=0.0)
+        annual_inflation_rate = validate_numeric_input(annual_inflation_rate, "Inflation Rate", min_val=0.0, max_val=1.0)
+
+        if ad == 0:
+            return 0.0
+        if annual_inflation_rate == 0:
+            return round(ac, 2)
+
+        r = (1 + annual_inflation_rate) ** (1/12) - 1  # Monthly rate
+        pmt = ac / ad
+
+        try:
+            factor = (1 - (1 + r) ** (-ad)) / r
+            return round(max(pmt * factor, 0.0), 2)
+        except (OverflowError, ValueError):
+            logger.warning("Present Value of Progress calculation overflow, returning AC")
+            return round(ac, 2)
+
+    except ValueError as e:
+        logger.error(f"Present Value of Progress calculation failed: {e}")
+        return 0.0
+
+def calculate_planned_value_of_project(bac, od, annual_inflation_rate) -> float:
+    """Calculate Planned Value of Project: (BAC/OD) * (1-(1+r)^(-OD))/r where r = (1+inflation_rate)^(1/12)"""
+    try:
+        bac = validate_numeric_input(bac, "BAC", min_val=0.0)
+        od = validate_numeric_input(od, "OD", min_val=0.0)
+        annual_inflation_rate = validate_numeric_input(annual_inflation_rate, "Inflation Rate", min_val=0.0, max_val=1.0)
+
+        if od == 0:
+            return 0.0
+        if annual_inflation_rate == 0:
+            return round(bac, 2)
+
+        r = (1 + annual_inflation_rate) ** (1/12) - 1  # Monthly rate
+        pmt = bac / od
+
+        try:
+            factor = (1 - (1 + r) ** (-od)) / r
+            return round(max(pmt * factor, 0.0), 2)
+        except (OverflowError, ValueError):
+            logger.warning("Planned Value of Project calculation overflow, returning BAC")
+            return round(bac, 2)
+
+    except ValueError as e:
+        logger.error(f"Planned Value of Project calculation failed: {e}")
+        return 0.0
+
+def calculate_likely_value_of_project(bac, ld, annual_inflation_rate) -> float:
+    """Calculate Likely Value of Project: (BAC/LD) * (1-(1+r)^(-LD))/r where r = (1+inflation_rate)^(1/12)"""
+    try:
+        bac = validate_numeric_input(bac, "BAC", min_val=0.0)
+        ld = validate_numeric_input(ld, "LD", min_val=0.0)
+        annual_inflation_rate = validate_numeric_input(annual_inflation_rate, "Inflation Rate", min_val=0.0, max_val=1.0)
+
+        if ld == 0:
+            return 0.0
+        if annual_inflation_rate == 0:
+            return round(bac, 2)
+
+        r = (1 + annual_inflation_rate) ** (1/12) - 1  # Monthly rate
+        pmt = bac / ld
+
+        try:
+            factor = (1 - (1 + r) ** (-ld)) / r
+            return round(max(pmt * factor, 0.0), 2)
+        except (OverflowError, ValueError):
+            logger.warning("Likely Value of Project calculation overflow, returning BAC")
+            return round(bac, 2)
+
+    except ValueError as e:
+        logger.error(f"Likely Value of Project calculation failed: {e}")
         return 0.0
 
 def calculate_pv_linear(bac, current_duration, total_duration) -> float:
@@ -1188,6 +1357,24 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         
         es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, plan_start)
         
+        # Calculate percentage metrics
+        percent_budget_used = safe_divide(ac, bac) * 100 if bac > 0 else 0.0
+        percent_time_used = safe_divide(actual_duration, original_duration) * 100 if original_duration > 0 else 0.0
+
+        # Calculate new financial metrics
+        present_value_progress = calculate_present_value_of_progress(ac, actual_duration, annual_inflation_rate)
+        planned_value_project = calculate_planned_value_of_project(bac, original_duration, annual_inflation_rate)
+
+        # Get likely duration from es_metrics for likely value calculation
+        likely_duration = es_metrics.get('forecast_duration', original_duration)
+        if likely_duration is None or not is_valid_finite_number(likely_duration):
+            likely_duration = original_duration
+        likely_value_project = calculate_likely_value_of_project(bac, likely_duration, annual_inflation_rate)
+
+        # Calculate percentages
+        percent_present_value_project = safe_divide(planned_value_project, bac) * 100 if bac > 0 else 0.0
+        percent_likely_value_project = safe_divide(likely_value_project, bac) * 100 if bac > 0 else 0.0
+
         return {
             'bac': float(bac),
             'ac': float(ac),
@@ -1202,10 +1389,17 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
             'original_duration_months': original_duration,
             'present_value': present_value,
             'planned_value': planned_value,
+            'percent_budget_used': percent_budget_used,
+            'percent_time_used': percent_time_used,
             'use_manual_pv': use_manual_pv,
             'manual_pv': manual_pv if use_manual_pv else None,
             'use_manual_ev': use_manual_ev,
             'manual_ev': manual_ev if use_manual_ev else None,
+            'present_value_progress': present_value_progress,
+            'planned_value_project': planned_value_project,
+            'likely_value_project': likely_value_project,
+            'percent_present_value_project': percent_present_value_project,
+            'percent_likely_value_project': percent_likely_value_project,
             **evm_metrics,
             **es_metrics
         }
@@ -1238,6 +1432,159 @@ def try_read_csv(file, header_option: str) -> pd.DataFrame:
             continue
     
     raise ValueError("Unable to read CSV file with any supported encoding")
+
+# =============================================================================
+# BATCH RESULTS FORMATTING FUNCTIONS
+# =============================================================================
+
+def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
+    """Reorganize batch results DataFrame with requested column order and formatting."""
+    if batch_df.empty:
+        return batch_df
+
+    # Create a new DataFrame with the required columns in the specified order
+    formatted_df = pd.DataFrame()
+
+    # Required columns in the specified order
+    column_mapping = {
+        'Project ID': 'project_id',
+        'Project Name': 'project_name',
+        'Budget': 'bac',
+        'Plan Start': 'plan_start',
+        'Plan Finish': 'plan_finish',
+        'Likely Finish': 'forecast_completion',
+        '% Budget Used': 'percent_budget_used',
+        '% Time Used': 'percent_time_used',
+        'Original Dur': 'original_duration_months',
+        'Actual Dur': 'actual_duration_months',
+        'Likely Dur': 'forecast_duration',
+        'Actual Cost': 'ac',
+        'Present Value': 'present_value',
+        'Plan Value': 'planned_value',
+        'Earned Value': 'earned_value',
+        'Present Value Progress': 'present_value_progress',
+        'Planned Value Project': 'planned_value_project',
+        'Likely Value Project': 'likely_value_project',
+        '% Present Value Project': 'percent_present_value_project',
+        '% Likely Value Project': 'percent_likely_value_project',
+        'CPI': 'cost_performance_index',
+        'SPI': 'schedule_performance_index',
+        'SPIe': 'spie',
+        'ETC': 'estimate_to_complete',
+        'EAC': 'estimate_at_completion'
+    }
+
+    # Build the formatted DataFrame
+    for display_name, source_col in column_mapping.items():
+        if source_col in batch_df.columns:
+            if display_name in ['% Budget Used', '% Time Used', '% Present Value Project', '% Likely Value Project']:
+                # Divide by 100 for proper Excel percentage display
+                formatted_df[display_name] = batch_df[source_col] / 100
+            else:
+                # Copy values as-is for all other columns
+                formatted_df[display_name] = batch_df[source_col]
+        else:
+            # Handle missing columns with appropriate defaults
+            if display_name in ['Project ID', 'Project Name']:
+                formatted_df[display_name] = 'N/A'
+            elif display_name in ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'ETC', 'EAC', 'Present Value', 'Present Value Progress', 'Planned Value Project', 'Likely Value Project']:
+                formatted_df[display_name] = 0.0
+            elif display_name in ['CPI', 'SPI', 'SPIe']:
+                formatted_df[display_name] = 1.0
+            elif display_name in ['% Budget Used', '% Time Used', '% Present Value Project', '% Likely Value Project']:
+                formatted_df[display_name] = 0.0
+            elif display_name in ['Original Dur', 'Actual Dur', 'Likely Dur']:
+                formatted_df[display_name] = 0
+            else:
+                formatted_df[display_name] = 'N/A'
+
+    return formatted_df
+
+def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: str = "$", currency_postfix: str = "") -> pd.DataFrame:
+    """Format batch results DataFrame for display with proper formatting (percentages, currencies, dates, durations)."""
+    if batch_df.empty:
+        return batch_df
+
+    # Create a copy for display formatting
+    display_df = batch_df.copy()
+
+    # Apply formatting to specific columns (moved to percentage_cols section below)
+
+    # Format currency columns including new financial analysis fields
+    currency_cols = ['bac', 'ac', 'planned_value', 'earned_value', 'present_value', 'present_value_progress',
+                     'planned_value_project', 'likely_value_project', 'estimate_to_complete', 'estimate_at_completion']
+    for col in currency_cols:
+        if col in display_df.columns:
+            new_col_name = {
+                'bac': 'Budget',
+                'ac': 'Actual Cost',
+                'planned_value': 'Plan Value',
+                'earned_value': 'Earned Value',
+                'present_value': 'Present Value',
+                'present_value_progress': 'Present Value Progress',
+                'planned_value_project': 'Planned Value Project',
+                'likely_value_project': 'Likely Value Project',
+                'estimate_to_complete': 'ETC',
+                'estimate_at_completion': 'EAC'
+            }.get(col, col)
+            display_df[new_col_name] = display_df[col].apply(lambda x: format_currency(x, currency_symbol, currency_postfix) if pd.notna(x) else "—")
+
+    # Format percentage columns including new financial percentages
+    percentage_cols = ['percent_budget_used', 'percent_time_used', 'percent_present_value_project', 'percent_likely_value_project']
+    for col in percentage_cols:
+        if col in display_df.columns:
+            new_col_name = {
+                'percent_budget_used': '% Budget Used',
+                'percent_time_used': '% Time Used',
+                'percent_present_value_project': '% Present Value Project',
+                'percent_likely_value_project': '% Likely Value Project'
+            }.get(col, col)
+            display_df[new_col_name] = display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "—")
+
+    # Format performance indices
+    perf_cols = ['cost_performance_index', 'schedule_performance_index', 'spie']
+    for col in perf_cols:
+        if col in display_df.columns:
+            new_col_name = {'cost_performance_index': 'CPI', 'schedule_performance_index': 'SPI', 'spie': 'SPIe'}.get(col, col)
+            display_df[new_col_name] = display_df[col].apply(lambda x: format_performance_index(x) if pd.notna(x) else "N/A")
+
+    # Format duration columns
+    duration_cols = ['original_duration_months', 'actual_duration_months', 'forecast_duration']
+    for col in duration_cols:
+        if col in display_df.columns:
+            new_col_name = {'original_duration_months': 'Original Dur', 'actual_duration_months': 'Actual Dur', 'forecast_duration': 'Likely Dur'}.get(col, col)
+            display_df[new_col_name] = display_df[col].apply(lambda x: format_duration(x) if pd.notna(x) else "—")
+
+    # Format date columns
+    date_cols = ['plan_start', 'plan_finish', 'forecast_completion']
+    for col in date_cols:
+        if col in display_df.columns:
+            new_col_name = {'plan_start': 'Plan Start', 'plan_finish': 'Plan Finish', 'forecast_completion': 'Likely Finish'}.get(col, col)
+            display_df[new_col_name] = display_df[col].apply(lambda x: format_date_dmy(x) if pd.notna(x) and str(x) != 'nan' else "N/A")
+
+    # Rename remaining columns
+    rename_map = {
+        'project_id': 'Project ID',
+        'project_name': 'Project Name'
+    }
+
+    for old_name, new_name in rename_map.items():
+        if old_name in display_df.columns:
+            display_df[new_name] = display_df[old_name]
+
+    # Select and reorder columns for display
+    display_columns = [
+        'Project ID', 'Project Name', 'Budget', 'Plan Start', 'Plan Finish', 'Likely Finish',
+        '% Budget Used', '% Time Used', 'Original Dur', 'Actual Dur', 'Likely Dur',
+        'Actual Cost', 'Present Value', 'Plan Value', 'Earned Value',
+        'Present Value Progress', 'Planned Value Project', 'Likely Value Project',
+        '% Present Value Project', '% Likely Value Project',
+        'CPI', 'SPI', 'SPIe', 'ETC', 'EAC'
+    ]
+
+    # Only include columns that exist
+    available_columns = [col for col in display_columns if col in display_df.columns]
+    return display_df[available_columns]
 
 # =============================================================================
 # BATCH CALCULATION FUNCTIONS
@@ -1795,7 +2142,7 @@ def render_data_source_section():
         df = st.session_state.raw_csv_df
         
         with st.expander("📊 Data Preview", expanded=False):
-            st.dataframe(df.head(10), use_container_width=True)
+            st.dataframe(df.head(10), width="stretch")
             st.caption(f"{len(df)} rows available for mapping.")
             
         # Get stored column mappings from session state
@@ -1862,7 +2209,7 @@ def render_data_source_section():
         selected_table = DEFAULT_DATASET_TABLE
 
         with st.expander("📊 Data Preview", expanded=False):
-            st.dataframe(df.head(10), use_container_width=True)
+            st.dataframe(df.head(10), width="stretch")
             st.caption(f"{len(df)} rows loaded.")
             
         # Get stored column mappings from session state (for display only)
@@ -2029,10 +2376,16 @@ def render_manual_entry_section(selected_table: str):
         col3, col4 = st.columns(2)
         with col3:
             new_start = st.date_input("📅 **Plan Start** (Required)",
-                                    value=date.today(), key="add_start")
+                                    value=date.today(),
+                                    min_value=date(2000, 1, 1),
+                                    max_value=date(2035, 12, 31),
+                                    key="add_start")
         with col4:
             new_finish = st.date_input("🏁 **Plan Finish** (Required)",
-                                     value=date.today() + timedelta(days=365), key="add_finish")
+                                     value=date.today() + timedelta(days=365),
+                                     min_value=date(2000, 1, 1),
+                                     max_value=date(2035, 12, 31),
+                                     key="add_finish")
 
         st.markdown("**Planned Value (PV) Configuration**")
         use_manual_pv = st.checkbox("📊 Enter Planned Value Manually", key="add_use_manual_pv",
@@ -2118,11 +2471,27 @@ def render_manual_entry_section(selected_table: str):
                 edit_ac = st.number_input("AC (Actual Cost)", min_value=0.0, value=float(project.get("AC", 0)), key="edit_ac")
             with col2:
                 try:
-                    edit_start = st.date_input("Plan Start", value=parse_date_any(project.get("Plan Start", date.today())).date(), key="edit_start")
-                    edit_finish = st.date_input("Plan Finish", value=parse_date_any(project.get("Plan Finish", date.today())).date(), key="edit_finish")
+                    edit_start = st.date_input("Plan Start",
+                                             value=parse_date_any(project.get("Plan Start", date.today())).date(),
+                                             min_value=date(2000, 1, 1),
+                                             max_value=date(2035, 12, 31),
+                                             key="edit_start")
+                    edit_finish = st.date_input("Plan Finish",
+                                              value=parse_date_any(project.get("Plan Finish", date.today())).date(),
+                                              min_value=date(2000, 1, 1),
+                                              max_value=date(2035, 12, 31),
+                                              key="edit_finish")
                 except:
-                    edit_start = st.date_input("Plan Start", value=date.today(), key="edit_start")
-                    edit_finish = st.date_input("Plan Finish", value=date.today() + timedelta(days=365), key="edit_finish")
+                    edit_start = st.date_input("Plan Start",
+                                             value=date.today(),
+                                             min_value=date(2000, 1, 1),
+                                             max_value=date(2035, 12, 31),
+                                             key="edit_start")
+                    edit_finish = st.date_input("Plan Finish",
+                                              value=date.today() + timedelta(days=365),
+                                              min_value=date(2000, 1, 1),
+                                              max_value=date(2035, 12, 31),
+                                              key="edit_finish")
             
             st.markdown("**Planned Value (PV) Configuration**")
             current_use_manual = bool(project.get("Use_Manual_PV", False))
@@ -2222,28 +2591,42 @@ def render_controls_section():
     """Render C. Controls section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">C. Controls</div>', unsafe_allow_html=True)
-    
+
+    # Load saved controls if they exist
+    saved_controls = st.session_state.config_dict.get('controls', {})
+
     # Curve settings
     curve_type = st.selectbox(
         "Curve Type (PV)",
         ["Linear", "S-Curve"],
+        index=0 if saved_controls.get('curve_type', 'linear').lower() == 'linear' else 1,
         key="curve_type_select"
     )
     
     if curve_type == "S-Curve":
         col1, col2 = st.columns(2)
         with col1:
-            alpha = st.number_input("S-Curve α", min_value=0.1, max_value=10.0, value=2.0, step=0.1, key="s_alpha")
+            alpha = st.number_input("S-Curve α", min_value=0.1, max_value=10.0,
+                                  value=saved_controls.get('alpha', 2.0), step=0.1, key="s_alpha")
         with col2:
-            beta = st.number_input("S-Curve β", min_value=0.1, max_value=10.0, value=2.0, step=0.1, key="s_beta")
+            beta = st.number_input("S-Curve β", min_value=0.1, max_value=10.0,
+                                 value=saved_controls.get('beta', 2.0), step=0.1, key="s_beta")
     else:
         alpha, beta = 2.0, 2.0
     
     # Date and financial settings
-    #data_date = st.date_input("Data Date", value=date.today(), key="controls_data_date")
+    saved_date = saved_controls.get('data_date')
+    if saved_date and isinstance(saved_date, str):
+        try:
+            saved_date = datetime.fromisoformat(saved_date).date()
+        except:
+            saved_date = date.today()
+    elif not isinstance(saved_date, date):
+        saved_date = date.today()
+
     data_date = st.date_input(
         "Data Date",
-        value=date.today(),                   # default selection
+        value=saved_date,                     # use saved value or default
         min_value=date(2000, 1, 1),           # lower limit
         max_value=date(2035, 12, 31),         # upper limit
         key="controls_data_date"
@@ -2252,8 +2635,9 @@ def render_controls_section():
     
     
     inflation_rate = st.number_input(
-        "Inflation Rate (% APR)", 
-        min_value=0.0, max_value=100.0, value=12.0, step=0.1,
+        "Inflation Rate (% APR)",
+        min_value=0.0, max_value=100.0,
+        value=saved_controls.get('inflation_rate', 12.0), step=0.1,
         key="controls_inflation"
     )
     
@@ -2261,11 +2645,21 @@ def render_controls_section():
     st.markdown("**Currency Settings**")
     col1, col2 = st.columns(2)
     with col1:
-        currency_symbol = st.text_input("Currency Symbol", value="PKR", max_chars=10, key="currency_symbol")
+        currency_symbol = st.text_input("Currency Symbol",
+                                       value=saved_controls.get('currency_symbol', "PKR"),
+                                       max_chars=10, key="currency_symbol")
     with col2:
+        postfix_options = ["", "Thousand", "Million", "Billion"]
+        saved_postfix = saved_controls.get('currency_postfix', "")
+        try:
+            postfix_index = postfix_options.index(saved_postfix)
+        except ValueError:
+            postfix_index = 0
+
         currency_postfix = st.selectbox(
             "Currency Postfix",
-            ["", "Thousand", "Million", "Billion"],
+            postfix_options,
+            index=postfix_index,
             key="currency_postfix"
         )
     
@@ -2399,7 +2793,9 @@ def render_batch_calculation_section():
                 results_df = load_table(f"{RESULTS_TABLE}_batch")
                 st.success(f"Found {len(results_df)} previous batch results")
                 if st.button("📥 Download Previous Results"):
-                    csv = results_df.to_csv(index=False)
+                    # Format the results for better display and download
+                    formatted_results_df = format_batch_results_for_download(results_df)
+                    csv = formatted_results_df.to_csv(index=False)
                     st.download_button(
                         "Download CSV",
                         csv,
@@ -2508,7 +2904,7 @@ def render_save_download_section():
         if st.button("Save JSON", 
                     type="primary", 
                     help="Save data and configuration as JSON file",
-                    use_container_width=True):
+                    width="stretch"):
             if not custom_filename.strip():
                 st.error("X Please enter a filename")
             else:
@@ -2563,7 +2959,7 @@ def render_save_download_section():
                             data=json_content,
                             file_name=clean_filename,
                             mime="application/json",
-                            use_container_width=True,
+                            width="stretch",
                             help=f"Save as: {clean_filename}"
                         )
                         
@@ -2578,7 +2974,7 @@ def render_save_download_section():
         if st.button("Exit", 
                     type="secondary", 
                     help="Clear session and restart application",
-                    use_container_width=True):
+                    width="stretch"):
             # Clear all session state
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
@@ -2592,7 +2988,7 @@ def render_save_download_section():
         # Quick action buttons when no data
         st.markdown("**[Action] Quick Actions:**")
         if st.button("[File] Load Demo Data", 
-                    use_container_width=True,
+                    width="stretch",
                     help="Load sample data for testing"):
             try:
                 # Create demo data
@@ -2640,22 +3036,28 @@ def render_enhanced_inputs_tab(project_data: Dict, results: Dict, controls: Dict
     # Financial Summary - Optimized for large numbers
     st.markdown("#### Financial Summary")
     
-    # Use smaller font and better layout for large numbers
+    # Enhanced styling for Financial Summary with larger fonts and better spacing
     st.markdown("""
     <style>
     .financial-metric {
-        font-size: 0.85rem;
-        line-height: 1.2;
+        font-size: 1.1rem;
+        line-height: 1.4;
+        margin-bottom: 15px;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        border-left: 4px solid #007bff;
     }
     .financial-value {
-        font-size: 0.9rem;
+        font-size: 1.3rem;
         font-weight: bold;
         color: #1f77b4;
+        margin-top: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Row 1: Budget and Actual Cost
+    # Row 1: Budget (BAC) and Actual Cost (AC)
     col1, col2 = st.columns(2)
     with col1:
         bac_formatted = format_currency(results['bac'], controls['currency_symbol'], controls['currency_postfix'])
@@ -2663,8 +3065,10 @@ def render_enhanced_inputs_tab(project_data: Dict, results: Dict, controls: Dict
     with col2:
         ac_formatted = format_currency(results['ac'], controls['currency_symbol'], controls['currency_postfix'])
         st.markdown(f'<div class="financial-metric">💸 **Actual Cost (AC)**<br><span class="financial-value">{ac_formatted}</span></div>', unsafe_allow_html=True)
-    
-    # Row 2: Planned and Earned Value
+
+    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+    # Row 2: Planned Value (PV) and Earned Value (EV)
     col3, col4 = st.columns(2)
     with col3:
         pv_formatted = format_currency(results['planned_value'], controls['currency_symbol'], controls['currency_postfix'])
@@ -2676,6 +3080,28 @@ def render_enhanced_inputs_tab(project_data: Dict, results: Dict, controls: Dict
         use_manual_ev = results.get('use_manual_ev', False)
         ev_label = f"💎 **Earned Value (EV{'**' if not use_manual_ev else ''})**"
         st.markdown(f'<div class="financial-metric">{ev_label}<br><span class="financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+    # Row 3: Present Value of Project (PrV) and % Present Value of Project
+    col5, col6 = st.columns(2)
+    with col5:
+        prv_formatted = format_currency(results['planned_value_project'], controls['currency_symbol'], controls['currency_postfix'])
+        st.markdown(f'<div class="financial-metric">🏗️ **Present Value of Project (PrV)**<br><span class="financial-value">{prv_formatted}</span></div>', unsafe_allow_html=True)
+    with col6:
+        percent_prv = results['percent_present_value_project']
+        st.markdown(f'<div class="financial-metric">📈 **% Present Value of Project**<br><span class="financial-value">{percent_prv:.2f}%</span></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+    # Row 4: Likely Value of Project (LkV) and % Likely Value of Project
+    col7, col8 = st.columns(2)
+    with col7:
+        lkv_formatted = format_currency(results['likely_value_project'], controls['currency_symbol'], controls['currency_postfix'])
+        st.markdown(f'<div class="financial-metric">🔮 **Likely Value of Project (LkV)**<br><span class="financial-value">{lkv_formatted}</span></div>', unsafe_allow_html=True)
+    with col8:
+        percent_lkv = results['percent_likely_value_project']
+        st.markdown(f'<div class="financial-metric">🎯 **% Likely Value of Project**<br><span class="financial-value">{percent_lkv:.2f}%</span></div>', unsafe_allow_html=True)
     
     # Performance Indicators - Multi-row layout
     st.markdown("#### Performance Indicators")
@@ -2759,6 +3185,11 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
         ("Project", "", project_data.get('project_name', ''), ""),
         ("Organization", "", project_data.get('organization', ''), ""),
         ("Project Manager", "", project_data.get('project_manager', ''), ""),
+        ("Plan Start", "", format_date_dmy(results.get('plan_start', 'N/A')), ""),
+        ("Plan Finish", "", format_date_dmy(results.get('plan_finish', 'N/A')), ""),
+        ("% Budget Used", "AC ÷ BAC × 100", format_percentage(results.get('percent_budget_used', 0)), ""),
+        ("% Time Used", "AT ÷ OD × 100", format_percentage(results.get('percent_time_used', 0)), ""),
+        ("Present Value", "Discounted actual cost", fmt_curr(results.get('present_value', 0)), ""),
         ("", "", "", ""),  # Spacer
         
         # Financial Overview
@@ -2767,6 +3198,15 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
         ("Actual Cost (AC)", "Total spent to date", fmt_curr(ac), ""),
         (f"Planned Value (PV{'**' if not use_manual_pv else ''})", "Value of work planned", fmt_curr(pv), ""),
         (f"Earned Value (EV{'**' if not use_manual_ev else ''})", "Value of work completed", fmt_curr(ev), ""),
+        ("", "", "", ""),  # Spacer
+
+        # Advanced Financial Analysis
+        ("🏗️ ADVANCED FINANCIAL ANALYSIS", "", "", ""),
+        ("Present Value of Progress", "(AC/AD) × PV Factor", fmt_curr(results.get('present_value_progress', 0)), "Discounted value of work progress"),
+        ("Planned Value of Project", "(BAC/OD) × PV Factor", fmt_curr(results.get('planned_value_project', 0)), "Total project value at planned pace"),
+        ("Likely Value of Project", "(BAC/LD) × PV Factor", fmt_curr(results.get('likely_value_project', 0)), "Total project value at forecast pace"),
+        ("% Present Value of Project", "PrV ÷ BAC × 100", f"{results.get('percent_present_value_project', 0):.2f}%", "Planned value efficiency"),
+        ("% Likely Value of Project", "LkV ÷ BAC × 100", f"{results.get('percent_likely_value_project', 0):.2f}%", "Forecast value efficiency"),
         ("", "", "", ""),  # Spacer
         
         # Performance Metrics
@@ -2801,11 +3241,11 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
         
         # Schedule Analysis
         ("📅 SCHEDULE ANALYSIS", "", "", ""),
-        ("Original Duration", "Planned months", f"{results['original_duration_months']:.1f} months", ""),
-        ("Elapsed Duration", "Months to date", f"{results['actual_duration_months']:.1f} months", ""),
-        ("Earned Schedule", "Time where PV = EV", f"{results['earned_schedule']:.1f} months", ""),
-        ("Expected Duration", "OD ÷ SPIe", f"{results.get('forecast_duration', 0)} months" if results.get('forecast_duration') else "Cannot determine", ""),
-        ("Expected Finish Date", "Based on current performance", results.get('forecast_completion', 'N/A'), ""),
+        ("Original Duration", "Planned months", format_duration(results['original_duration_months']), ""),
+        ("Elapsed Duration", "Months to date", format_duration(results['actual_duration_months']), ""),
+        ("Earned Schedule", "Time where PV = EV", format_duration(results['earned_schedule']), ""),
+        ("Expected Duration", "OD ÷ SPIe", format_duration(results.get('forecast_duration', 0)) if results.get('forecast_duration') else "Cannot determine", ""),
+        ("Expected Finish Date", "Based on current performance", format_date_dmy(results.get('forecast_completion', 'N/A')), ""),
     ]
     
     # Add currency note if postfix is used
@@ -2859,6 +3299,8 @@ def main():
             df, selected_table, column_mapping = render_data_source_section()
             render_manual_entry_section(selected_table)
             controls = render_controls_section()
+            # Store controls in config_dict for JSON export
+            st.session_state.config_dict['controls'] = controls
             llm_config = render_llm_provider_section()
             enable_batch = render_batch_calculation_section()
             render_help_section()
@@ -2906,7 +3348,7 @@ def main():
         st.markdown("### 🎯 Single Project Analysis")
         
         with st.expander("📊 Data Preview", expanded=False):
-            st.dataframe(display_df.head(20), use_container_width=True)
+            st.dataframe(display_df.head(20), width="stretch")
             st.caption(f"Showing first 20 of {len(display_df)} total projects.")
         
         
@@ -2993,40 +3435,84 @@ def main():
                     st.markdown("### 📊 Portfolio Performance Analysis")
                     
                     st.markdown("#### 💰 Portfolio Financial Summary")
+
+                    # Enhanced styling for Portfolio Financial Summary with larger fonts and better spacing
                     st.markdown("""
                     <style>
-                    .portfolio-financial-metric { font-size: 0.85rem; line-height: 1.2; }
-                    .portfolio-financial-value { font-size: 0.9rem; font-weight: bold; color: #1f77b4; }
+                    .portfolio-financial-metric {
+                        font-size: 1.1rem;
+                        line-height: 1.4;
+                        margin-bottom: 15px;
+                        padding: 10px;
+                        border-radius: 8px;
+                        background-color: #f8f9fa;
+                        border-left: 4px solid #007bff;
+                    }
+                    .portfolio-financial-value {
+                        font-size: 1.3rem;
+                        font-weight: bold;
+                        color: #1f77b4;
+                        margin-top: 8px;
+                    }
                     </style>
                     """, unsafe_allow_html=True)
-                    
+
+                    # Row 1: Budget (BAC) and Actual Cost (AC)
                     col1, col2 = st.columns(2)
                     with col1:
                         bac_formatted = format_currency(portfolio_summary['total_bac'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💰 **Total Budget (BAC)**<br><span class="portfolio-financial-value">{bac_formatted}</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="portfolio-financial-metric">💰 **Portfolio Budget (BAC)**<br><span class="portfolio-financial-value">{bac_formatted}</span></div>', unsafe_allow_html=True)
                     with col2:
                         ac_formatted = format_currency(portfolio_summary['total_ac'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💸 **Total Actual Cost (AC)**<br><span class="portfolio-financial-value">{ac_formatted}</span></div>', unsafe_allow_html=True)
-                    
+                        st.markdown(f'<div class="portfolio-financial-metric">💸 **Portfolio Actual Cost (AC)**<br><span class="portfolio-financial-value">{ac_formatted}</span></div>', unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+                    # Row 2: Planned Value (PV) and Earned Value (EV)
                     col3, col4 = st.columns(2)
                     with col3:
                         pv_formatted = format_currency(portfolio_summary['total_pv'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">📊 **Total Planned Value (PV)**<br><span class="portfolio-financial-value">{pv_formatted}</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="portfolio-financial-metric">📊 **Portfolio Planned Value (PV)**<br><span class="portfolio-financial-value">{pv_formatted}</span></div>', unsafe_allow_html=True)
                     with col4:
                         ev_formatted = format_currency(portfolio_summary['total_ev'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💎 **Total Earned Value (EV)**<br><span class="portfolio-financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="portfolio-financial-metric">💎 **Portfolio Earned Value (EV)**<br><span class="portfolio-financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+                    # Row 3: Present Value of Project (PrV) and % Present Value of Project
+                    col5, col6 = st.columns(2)
+                    with col5:
+                        prv_formatted = format_currency(portfolio_summary['total_planned_value_project'], controls['currency_symbol'], controls['currency_postfix'])
+                        st.markdown(f'<div class="portfolio-financial-metric">🏗️ **Present Value of Portfolio (PrV)**<br><span class="portfolio-financial-value">{prv_formatted}</span></div>', unsafe_allow_html=True)
+                    with col6:
+                        percent_prv = portfolio_summary['total_percent_present_value_project']
+                        st.markdown(f'<div class="portfolio-financial-metric">📈 **% Present Value of Portfolio**<br><span class="portfolio-financial-value">{percent_prv:.2f}%</span></div>', unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+                    # Row 4: Likely Value of Project (LkV) and % Likely Value of Project
+                    col7, col8 = st.columns(2)
+                    with col7:
+                        lkv_formatted = format_currency(portfolio_summary['total_likely_value_project'], controls['currency_symbol'], controls['currency_postfix'])
+                        st.markdown(f'<div class="portfolio-financial-metric">🔮 **Likely Value of Portfolio (LkV)**<br><span class="portfolio-financial-value">{lkv_formatted}</span></div>', unsafe_allow_html=True)
+                    with col8:
+                        percent_lkv = portfolio_summary['total_percent_likely_value_project']
+                        st.markdown(f'<div class="portfolio-financial-metric">🎯 **% Value of Portfolio**<br><span class="portfolio-financial-value">{percent_lkv:.2f}%</span></div>', unsafe_allow_html=True)
                     
                     st.markdown("#### 📈 Portfolio Progress Summary")
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         budget_used = safe_divide(portfolio_summary['total_ac'], portfolio_summary['total_bac']) * 100
                         st.metric("% Budget Used", format_percentage(budget_used))
                     with col2:
+                        time_used = portfolio_summary['weighted_avg_time_used']
+                        st.metric("% Time Used", format_percentage(time_used))
+                    with col3:
                         earned_value_pct = safe_divide(portfolio_summary['total_ev'], portfolio_summary['total_bac']) * 100
                         st.metric("% Value Earned", format_percentage(earned_value_pct))
-                    with col3:
+                    with col4:
                         avg_progress = portfolio_summary['average_progress']
-                        st.metric("Avg Progress", format_percentage(avg_progress))
+                        st.metric("% Present Value of Progress", format_percentage(avg_progress))
                     
                     st.markdown("#### 🎯 Performance Quadrants Analysis")
                     quadrant_data = []
@@ -3049,7 +3535,7 @@ def main():
                             'Total Budget': format_currency(budget, controls['currency_symbol'], controls['currency_postfix']),
                             'Budget %': format_percentage(budget_pct)
                         })
-                    st.dataframe(pd.DataFrame(quadrant_data), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(quadrant_data), width="stretch", hide_index=True)
                     
                     st.markdown("#### 📊 Portfolio Performance Charts")
                     try:
@@ -3106,11 +3592,17 @@ def main():
                             cpis = batch_df.get('cost_performance_index', pd.Series([1.0] * len(batch_df))).fillna(1.0)
                             colors = ['green' if cpi >= 1.0 else 'orange' if cpi >= 0.9 else 'red' for cpi in cpis]
                             ax3.scatter(project_norm_times, project_norm_evs, c=colors, s=50, alpha=0.7, edgecolors='black', linewidth=1, label='Projects')
+
+                        # Add portfolio point (% time used, % budget used) as yellow circle
+                        portfolio_time_used = portfolio_summary['weighted_avg_time_used'] / 100  # Convert to normalized (0-1)
+                        portfolio_budget_used = safe_divide(portfolio_summary['total_ac'], portfolio_summary['total_bac'])
+                        ax3.scatter([portfolio_time_used], [portfolio_budget_used], c='yellow', s=200, alpha=0.8,
+                                   edgecolors='black', linewidth=2, label='Portfolio', marker='o')
                         ax3.set_xlim(0, 1); ax3.set_ylim(0, 1.2); ax3.set_xlabel('Time (Normalized)'); ax3.set_ylabel('PV (Normalized)')
                         ax3.set_title('Portfolio Time/Budget Performance Curve', fontweight='bold'); ax3.legend(loc='upper left'); ax3.grid(True, alpha=0.3)
                         
                         plt.tight_layout()
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, width="stretch")
                     except Exception as e:
                         st.error(f"Chart generation failed: {e}")
 
@@ -3136,8 +3628,14 @@ def main():
                             st.download_button("📥 Download Report", portfolio_report, file_name=f"portfolio_executive_report.md", mime="text/markdown")
                 
                 st.markdown("### 📋 Detailed Results")
-                st.dataframe(batch_df, use_container_width=True, height=400)
-                csv_data = batch_df.to_csv(index=False).encode('utf-8')
+
+                # Format the results for display with proper formatting
+                display_batch_df = format_batch_results_for_display(batch_df, controls['currency_symbol'], controls['currency_postfix'])
+                st.dataframe(display_batch_df, width="stretch", height=400)
+
+                # Prepare CSV data with raw values (no formatting for CSV)
+                csv_batch_df = format_batch_results_for_download(batch_df)
+                csv_data = csv_batch_df.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Download Batch Results", csv_data, file_name="batch_evm_results.csv", mime="text/csv", type="primary")
             return
         
@@ -3231,7 +3729,7 @@ def main():
             with tab2:
                 st.markdown("### 📊 Detailed EVM Analysis")
                 results_table = build_enhanced_results_table(results, controls, project_data)
-                st.dataframe(results_table, use_container_width=True, height=600)
+                st.dataframe(results_table, width="stretch", height=600)
                 
                 csv_buffer = io.StringIO()
                 results_table.to_csv(csv_buffer, index=False)
