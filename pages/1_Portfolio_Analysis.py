@@ -2338,9 +2338,9 @@ def render_column_mapping_section(columns: List[str], stored_mapping: Dict = Non
     return mapping
 
 def render_manual_entry_section(selected_table: str):
-    """Render B. Manual Entry section."""
+    """Render D. Manual Entry section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">B. Manual Entry</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">D. Manual Entry</div>', unsafe_allow_html=True)
     
     has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty) or selected_table
     if not has_data:
@@ -2588,9 +2588,9 @@ def render_manual_entry_section(selected_table: str):
     st.markdown('</div>', unsafe_allow_html=True)
     
 def render_controls_section():
-    """Render C. Controls section."""
+    """Render B. Controls section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">C. Controls</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">B. Controls</div>', unsafe_allow_html=True)
 
     # Load saved controls if they exist
     saved_controls = st.session_state.config_dict.get('controls', {})
@@ -2676,9 +2676,9 @@ def render_controls_section():
     }
 
 def render_llm_provider_section():
-    """Render D. LLM Provider section."""
+    """Render E. LLM Provider section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">D. LLM Provider (Executive Brief)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">E. LLM Provider (Executive Brief)</div>', unsafe_allow_html=True)
     
     # Load saved configuration
     model_config = load_model_config()
@@ -2772,9 +2772,9 @@ def render_llm_provider_section():
     }
 
 def render_batch_calculation_section():
-    """Render E. Batch Calculation section."""
+    """Render C. Batch Calculations section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">E. Batch Calculation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">C. Batch Calculations</div>', unsafe_allow_html=True)
     
     enable_batch = st.checkbox(
         "Enable Batch Calculation",
@@ -2817,9 +2817,9 @@ def render_batch_calculation_section():
     return enable_batch
 
 def render_help_section():
-    """Render F. Help & Information section."""
+    """Render G. Help & Information section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">F. Help & Information</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">G. Help & Information</div>', unsafe_allow_html=True)
     
     # Collapsible help sections
     with st.expander("📚 Data Source Options"):
@@ -2856,9 +2856,9 @@ def render_help_section():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def render_save_download_section():
-    """Render G. Save & Download section."""
+    """Render F. Save & Download section."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">G. Save & Download</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">F. Save & Download</div>', unsafe_allow_html=True)
     
     # Check if there's data to save
     has_data = False
@@ -3295,16 +3295,16 @@ def main():
         with st.sidebar:
             st.markdown("## ⚙️ Configuration")
             
-            # Render all sidebar sections
+            # Render all sidebar sections in desired order
             df, selected_table, column_mapping = render_data_source_section()
-            render_manual_entry_section(selected_table)
             controls = render_controls_section()
             # Store controls in config_dict for JSON export
             st.session_state.config_dict['controls'] = controls
-            llm_config = render_llm_provider_section()
             enable_batch = render_batch_calculation_section()
-            render_help_section()
+            render_manual_entry_section(selected_table)
+            llm_config = render_llm_provider_section()
             render_save_download_section()
+            render_help_section()
         
         
         # Main content area - prioritize session state data
