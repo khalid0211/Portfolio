@@ -439,8 +439,26 @@ def main():
     """, unsafe_allow_html=True)
     
     # Get currency settings from Portfolio Analysis if available
-    currency_symbol = getattr(st.session_state, 'dashboard_currency_symbol', '$')
-    currency_postfix = getattr(st.session_state, 'dashboard_currency_postfix', '')
+    # Try multiple sources in order of preference:
+    # 1. Dashboard-specific settings (from Generate Executive Dashboard button)
+    # 2. Widget session state (from current Portfolio Analysis inputs)
+    # 3. Saved controls (from config_dict)
+    # 4. Default values
+
+    saved_controls = getattr(st.session_state, 'config_dict', {}).get('controls', {})
+
+    currency_symbol = (
+        getattr(st.session_state, 'dashboard_currency_symbol', None) or
+        getattr(st.session_state, 'currency_symbol', None) or
+        saved_controls.get('currency_symbol', '$')
+    )
+
+    currency_postfix = (
+        getattr(st.session_state, 'dashboard_currency_postfix', None) or
+        getattr(st.session_state, 'currency_postfix', None) or
+        saved_controls.get('currency_postfix', '')
+    )
+
 
 
     # Check for data from Portfolio Analysis first
@@ -748,12 +766,34 @@ def main():
             )
         
         with col3:
-            budget_categories = [f"Under {currency_symbol} 1K", f"{currency_symbol} 1K - {currency_symbol} 10K", f"{currency_symbol} 10K - {currency_symbol} 50K", f"{currency_symbol} 50K - {currency_symbol} 100K", f"{currency_symbol} 100K - {currency_symbol} 500K", f"Over {currency_symbol} 500K"]
-            budget_filter = st.multiselect(
-                "Budget Range",
-                options=budget_categories,
-                default=budget_categories
-            )
+            # Budget range toggle controls
+            st.write("**Budget Range Controls**")
+
+            # Lower budget range toggle
+            enable_lower_budget = st.checkbox("Enable Lower Budget Limit", value=False, key="lower_budget_toggle")
+            if enable_lower_budget:
+                min_budget = st.number_input(
+                    f"Minimum Budget ({currency_symbol})",
+                    min_value=0,
+                    value=0,
+                    step=1000,
+                    key="min_budget_value"
+                )
+            else:
+                min_budget = 0
+
+            # Upper budget range toggle
+            enable_upper_budget = st.checkbox("Enable Upper Budget Limit", value=False, key="upper_budget_toggle")
+            if enable_upper_budget:
+                max_budget = st.number_input(
+                    f"Maximum Budget ({currency_symbol})",
+                    min_value=0,
+                    value=1000000,
+                    step=1000,
+                    key="max_budget_value"
+                )
+            else:
+                max_budget = float('inf')
         
         # Filters - Row 2
         col1, col2, col3 = st.columns(3)
@@ -800,7 +840,8 @@ def main():
         # Apply other filters
         filtered_df = filtered_df[
             (filtered_df['Health_Category'].isin(health_filter)) &
-            (filtered_df['Budget_Category'].isin(budget_filter)) &
+            (filtered_df['Budget'] >= min_budget) &
+            (filtered_df['Budget'] <= max_budget) &
             (filtered_df['CPI'].between(cpi_range[0], cpi_range[1])) &
             (filtered_df['SPI'].between(spi_range[0], spi_range[1])) &
             (filtered_df['SPIe'].between(spie_range[0], spie_range[1]))
@@ -866,10 +907,6 @@ def main():
     # Sidebar with executive styling
     with st.sidebar:
         st.markdown('<div class="section-header">⚙️ Executive Controls</div>', unsafe_allow_html=True)
-        
-        auto_refresh = st.checkbox("🔄 Real-time Monitoring", help="Enable auto-refresh for live dashboard updates")
-        if auto_refresh:
-            st.success("📊 Dashboard monitoring active")
         
         st.markdown('<div class="section-header">📤 Portfolio Reports</div>', unsafe_allow_html=True)
         if st.button("📋 Export Critical Projects", key="export_critical"):

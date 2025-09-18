@@ -393,11 +393,34 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # Get currency settings from Portfolio Analysis if available
+    # Try multiple sources in order of preference:
+    # 1. Dashboard-specific settings (from Generate Executive Dashboard button)
+    # 2. Widget session state (from current Portfolio Analysis inputs)
+    # 3. Saved controls (from config_dict)
+    # 4. Default values
+
+    saved_controls = getattr(st.session_state, 'config_dict', {}).get('controls', {})
+
+    currency_symbol = (
+        getattr(st.session_state, 'dashboard_currency_symbol', None) or
+        getattr(st.session_state, 'currency_symbol', None) or
+        saved_controls.get('currency_symbol', '$')
+    )
+
+    currency_postfix = (
+        getattr(st.session_state, 'dashboard_currency_postfix', None) or
+        getattr(st.session_state, 'currency_postfix', None) or
+        saved_controls.get('currency_postfix', '')
+    )
+
     # Check for data from Portfolio Analysis first
     if hasattr(st.session_state, 'dashboard_data') and st.session_state.dashboard_data is not None:
         df = st.session_state.dashboard_data.copy()
         st.sidebar.success("✅ Using data from Portfolio Analysis")
         st.sidebar.info(f"📊 {len(df)} projects loaded")
+        if currency_symbol != '$' or currency_postfix != '':
+            st.sidebar.info(f"💱 Currency: {currency_symbol} {currency_postfix}")
     else:
         # File upload option as fallback
         uploaded_file = st.sidebar.file_uploader(
@@ -449,7 +472,7 @@ def main():
     with col2:
         st.metric(
             label="Total Budget",
-            value=f"${metrics['total_budget']/1000:.0f}K",
+            value=format_currency(metrics['total_budget'], currency_symbol, currency_postfix),
             delta=None
         )
     
@@ -457,7 +480,7 @@ def main():
         delta_color = "inverse" if metrics['forecast_overrun'] > 0 else "normal"
         st.metric(
             label="Forecast Overrun",
-            value=f"${metrics['forecast_overrun']/1000:.0f}K",
+            value=format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix),
             delta=f"{metrics['overrun_percentage']:.1f}%",
             delta_color=delta_color
         )
@@ -586,9 +609,9 @@ def main():
         
         # Financial alert
         if metrics['forecast_overrun'] > 0:
-            st.error(f"📢 Portfolio EAC: ${metrics['total_eac']/1000:.0f}K (+${metrics['forecast_overrun']/1000:.0f}K over budget)")
+            st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} over budget)")
         else:
-            st.success(f"✅ Portfolio EAC: ${metrics['total_eac']/1000:.0f}K (Under budget)")
+            st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (Under budget)")
     
     # Critical Projects Section
     st.markdown('<div class="section-header">🔥 Critical Projects - Executive Intervention Required</div>', unsafe_allow_html=True)
@@ -605,7 +628,7 @@ def main():
                 with col2:
                     st.metric("SPI", f"{project.get('SPI', 0):.2f}")
                 with col3:
-                    st.metric("Budget", f"${project.get('Budget', 0)/1000:.0f}K")
+                    st.metric("Budget", format_currency(project.get('Budget', 0), currency_symbol, currency_postfix))
                 
                 st.write(f"**Status:** Critical performance issues requiring immediate intervention")
     else:
@@ -636,19 +659,19 @@ def main():
         st.markdown('<div class="section-header">🔍 Advanced Portfolio Analytics & Filtering</div>', unsafe_allow_html=True)
         
         # Create budget categories for filtering
-        def categorize_budget(budget):
+        def categorize_budget(budget, symbol=currency_symbol):
             if budget < 1000:
-                return "Under $1K"
+                return f"Under {symbol} 1K"
             elif budget < 10000:
-                return "$1K - $10K"
+                return f"{symbol} 1K - {symbol} 10K"
             elif budget < 50000:
-                return "$10K - $50K"
+                return f"{symbol} 10K - {symbol} 50K"
             elif budget < 100000:
-                return "$50K - $100K"
+                return f"{symbol} 50K - {symbol} 100K"
             elif budget < 500000:
-                return "$100K - $500K"
+                return f"{symbol} 100K - {symbol} 500K"
             else:
-                return "Over $500K"
+                return f"Over {symbol} 500K"
         
         df['Budget_Category'] = df['Budget'].apply(categorize_budget)
         
@@ -684,12 +707,34 @@ def main():
             )
         
         with col3:
-            budget_categories = ["Under $1K", "$1K - $10K", "$10K - $50K", "$50K - $100K", "$100K - $500K", "Over $500K"]
-            budget_filter = st.multiselect(
-                "Budget Range",
-                options=budget_categories,
-                default=budget_categories
-            )
+            # Budget range toggle controls
+            st.write("**Budget Range Controls**")
+
+            # Lower budget range toggle
+            enable_lower_budget = st.checkbox("Enable Lower Budget Limit", value=False, key="lower_budget_toggle")
+            if enable_lower_budget:
+                min_budget = st.number_input(
+                    f"Minimum Budget ({currency_symbol})",
+                    min_value=0,
+                    value=0,
+                    step=1000,
+                    key="min_budget_value"
+                )
+            else:
+                min_budget = 0
+
+            # Upper budget range toggle
+            enable_upper_budget = st.checkbox("Enable Upper Budget Limit", value=False, key="upper_budget_toggle")
+            if enable_upper_budget:
+                max_budget = st.number_input(
+                    f"Maximum Budget ({currency_symbol})",
+                    min_value=0,
+                    value=1000000,
+                    step=1000,
+                    key="max_budget_value"
+                )
+            else:
+                max_budget = float('inf')
         
         # Filters - Row 2
         col1, col2, col3 = st.columns(3)
@@ -736,7 +781,8 @@ def main():
         # Apply other filters
         filtered_df = filtered_df[
             (filtered_df['Health_Category'].isin(health_filter)) &
-            (filtered_df['Budget_Category'].isin(budget_filter)) &
+            (filtered_df['Budget'] >= min_budget) &
+            (filtered_df['Budget'] <= max_budget) &
             (filtered_df['CPI'].between(cpi_range[0], cpi_range[1])) &
             (filtered_df['SPI'].between(spi_range[0], spi_range[1])) &
             (filtered_df['SPIe'].between(spie_range[0], spie_range[1]))
@@ -758,11 +804,11 @@ def main():
             
             # Format budget columns
             if 'Budget' in display_df.columns:
-                display_df['Budget'] = display_df['Budget'].apply(lambda x: f"${x:,.0f}")
+                display_df['Budget'] = display_df['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             if 'Actual Cost' in display_df.columns:
-                display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: f"${x:,.0f}")
+                display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             if 'EAC' in display_df.columns:
-                display_df['EAC'] = display_df['EAC'].apply(lambda x: f"${x:,.0f}")
+                display_df['EAC'] = display_df['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             
             # Format performance indices
             for col in ['CPI', 'SPI', 'SPIe']:
@@ -797,15 +843,11 @@ def main():
             with col3:
                 st.metric("📊 Avg SPIe", f"{filtered_df['SPIe'].mean():.3f}", help="Average Schedule Performance Index Estimate for filtered projects")
             with col4:
-                st.metric("💰 Total Budget", f"${filtered_df['Budget'].sum()/1000:.0f}K", help="Combined budget for filtered projects")
+                st.metric("💰 Total Budget", format_currency(filtered_df['Budget'].sum(), currency_symbol, currency_postfix), help="Combined budget for filtered projects")
     
     # Sidebar with executive styling
     with st.sidebar:
         st.markdown('<div class="section-header">⚙️ Executive Controls</div>', unsafe_allow_html=True)
-        
-        auto_refresh = st.checkbox("🔄 Real-time Monitoring", help="Enable auto-refresh for live dashboard updates")
-        if auto_refresh:
-            st.success("📊 Dashboard monitoring active")
         
         st.markdown('<div class="section-header">📤 Portfolio Reports</div>', unsafe_allow_html=True)
         if st.button("📋 Export Critical Projects", key="export_critical"):
@@ -843,7 +885,7 @@ def main():
         
         **Key Insights:**
         - {metrics['critical_projects']} projects need immediate attention
-        - ${metrics['forecast_overrun']/1000:.0f}K projected overrun
+        - {format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} projected overrun
         - {metrics['overrun_percentage']:.1f}% budget variance
         """)
 
