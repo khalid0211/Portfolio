@@ -3645,9 +3645,21 @@ def main():
 
                 with col2:
                     if st.button("📊 Generate Executive Dashboard", type="primary"):
-                        # Store the batch results in session state for the dashboard
-                        st.session_state.dashboard_data = batch_df
-                        st.switch_page("cpo_dashboard.py")
+                        # Store the batch results and currency settings in session state for the dashboard
+                        if st.session_state.batch_results is not None:
+                            st.session_state.dashboard_data = st.session_state.batch_results.copy()
+
+                            # Get fresh currency settings directly from session state
+                            current_currency_symbol = st.session_state.get('currency_symbol', '$')
+                            current_currency_postfix = st.session_state.get('currency_postfix', '')
+
+                            # Pass currency settings to dashboard
+                            st.session_state.dashboard_currency_symbol = current_currency_symbol
+                            st.session_state.dashboard_currency_postfix = current_currency_postfix
+
+                            st.switch_page("pages/2_Executive_Dashboard.py")
+                        else:
+                            st.error("No batch results available. Please run batch calculation first.")
             return
         
         # For demo data or processed CSV data, use standard column mapping since it's already in correct format

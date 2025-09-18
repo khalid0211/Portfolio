@@ -339,11 +339,23 @@ def load_data():
         st.error("Please upload the batch_evm_results.csv file to proceed.")
         return None
 
+def format_currency(amount, currency_symbol='$', currency_postfix='', thousands=True):
+    """Format currency values with proper symbol and postfix"""
+    if thousands:
+        formatted_amount = f"{amount/1000:.0f}K"
+    else:
+        formatted_amount = f"{amount:,.0f}"
+
+    if currency_postfix:
+        return f"{currency_symbol} {formatted_amount} {currency_postfix}"
+    else:
+        return f"{currency_symbol} {formatted_amount}"
+
 def categorize_project_health(row):
     """Categorize project health based on CPI and SPI"""
     cpi = row.get('CPI', 0)
     spi = row.get('SPI', 0)
-    
+
     if cpi >= 0.95 and spi >= 0.95:
         return 'Healthy'
     elif cpi >= 0.85 and spi >= 0.85:
@@ -351,18 +363,51 @@ def categorize_project_health(row):
     else:
         return 'Critical'
 
+def map_columns_to_standard(df):
+    """Map Portfolio Analysis columns to dashboard expected columns"""
+    # Create a mapping from Portfolio Analysis format to Dashboard format
+    column_mapping = {
+        # Portfolio Analysis -> Dashboard expected
+        'bac': 'Budget',
+        'ac': 'Actual Cost',
+        'earned_value': 'Earned Value',
+        'planned_value': 'Plan Value',
+        'etc': 'ETC',
+        'estimate_at_completion': 'EAC',
+        'cost_performance_index': 'CPI',
+        'schedule_performance_index': 'SPI',
+        'spie': 'SPIe',
+        'project_name': 'Project Name',
+        'project_id': 'Project ID'
+    }
+
+    # Create a copy of the dataframe
+    mapped_df = df.copy()
+
+    # Rename columns if they exist in the source format
+    for source_col, target_col in column_mapping.items():
+        if source_col in mapped_df.columns and target_col not in mapped_df.columns:
+            mapped_df[target_col] = mapped_df[source_col]
+
+    return mapped_df
+
 def calculate_portfolio_metrics(df):
     """Calculate key portfolio-level metrics"""
+    # First map columns to expected format
+    df = map_columns_to_standard(df)
+
     metrics = {}
-    
+
     # Basic counts and totals
     metrics['total_projects'] = len(df)
-    metrics['total_budget'] = df['Budget'].sum()
-    metrics['total_actual_cost'] = df['Actual Cost'].sum()
-    metrics['total_earned_value'] = df['Earned Value'].sum()
-    metrics['total_planned_value'] = df['Plan Value'].sum()
-    metrics['total_etc'] = df['ETC'].sum()
-    metrics['total_eac'] = df['EAC'].sum()
+
+    # Use get() with default values for missing columns
+    metrics['total_budget'] = df.get('Budget', pd.Series([0])).sum()
+    metrics['total_actual_cost'] = df.get('Actual Cost', pd.Series([0])).sum()
+    metrics['total_earned_value'] = df.get('Earned Value', pd.Series([0])).sum()
+    metrics['total_planned_value'] = df.get('Plan Value', pd.Series([0])).sum()
+    metrics['total_etc'] = df.get('ETC', pd.Series([0])).sum()
+    metrics['total_eac'] = df.get('EAC', pd.Series([0])).sum()
     
     # Portfolio performance indices
     metrics['portfolio_cpi'] = metrics['total_earned_value'] / metrics['total_actual_cost'] if metrics['total_actual_cost'] > 0 else 0
@@ -393,15 +438,33 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # Get currency settings from Portfolio Analysis if available
+    currency_symbol = getattr(st.session_state, 'dashboard_currency_symbol', '$')
+    currency_postfix = getattr(st.session_state, 'dashboard_currency_postfix', '')
+
+
     # Check for data from Portfolio Analysis first
     if hasattr(st.session_state, 'dashboard_data') and st.session_state.dashboard_data is not None:
         df = st.session_state.dashboard_data.copy()
         st.sidebar.success("✅ Using data from Portfolio Analysis")
         st.sidebar.info(f"📊 {len(df)} projects loaded")
+        if currency_symbol != '$' or currency_postfix != '':
+            st.sidebar.info(f"💱 Currency: {currency_symbol} {currency_postfix}")
+    elif hasattr(st.session_state, 'batch_results') and st.session_state.batch_results is not None:
+        # Fallback: use batch_results directly
+        df = st.session_state.batch_results.copy()
+        st.sidebar.success("✅ Using batch results from Portfolio Analysis")
+        st.sidebar.info(f"📊 {len(df)} projects loaded")
     else:
         # File upload option as fallback
+        st.sidebar.info("💡 **Recommended Workflow:**")
+        st.sidebar.markdown("1. Go to **Portfolio Analysis**")
+        st.sidebar.markdown("2. Upload data & run calculations")
+        st.sidebar.markdown("3. Click **Generate Executive Dashboard**")
+        st.sidebar.markdown("---")
+
         uploaded_file = st.sidebar.file_uploader(
-            "Upload Portfolio Data",
+            "Or Upload Portfolio Data Directly",
             type=['csv'],
             help="Upload your batch_evm_results.csv file or use Portfolio Analysis to generate data"
         )
@@ -420,8 +483,9 @@ def main():
     
     if df is None:
         st.stop()
-    
-    # Calculate metrics
+
+    # Map columns to expected format and calculate metrics
+    df = map_columns_to_standard(df)
     metrics = calculate_portfolio_metrics(df)
     
     # Critical Alert Banner
@@ -449,7 +513,7 @@ def main():
     with col2:
         st.metric(
             label="Total Budget",
-            value=f"${metrics['total_budget']/1000:.0f}K",
+            value=format_currency(metrics['total_budget'], currency_symbol, currency_postfix),
             delta=None
         )
     
@@ -457,7 +521,7 @@ def main():
         delta_color = "inverse" if metrics['forecast_overrun'] > 0 else "normal"
         st.metric(
             label="Forecast Overrun",
-            value=f"${metrics['forecast_overrun']/1000:.0f}K",
+            value=format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix),
             delta=f"{metrics['overrun_percentage']:.1f}%",
             delta_color=delta_color
         )
@@ -586,9 +650,9 @@ def main():
         
         # Financial alert
         if metrics['forecast_overrun'] > 0:
-            st.error(f"📢 Portfolio EAC: ${metrics['total_eac']/1000:.0f}K (+${metrics['forecast_overrun']/1000:.0f}K over budget)")
+            st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} over budget)")
         else:
-            st.success(f"✅ Portfolio EAC: ${metrics['total_eac']/1000:.0f}K (Under budget)")
+            st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (Under budget)")
     
     # Critical Projects Section
     st.markdown('<div class="section-header">🔥 Critical Projects - Executive Intervention Required</div>', unsafe_allow_html=True)
@@ -605,7 +669,7 @@ def main():
                 with col2:
                     st.metric("SPI", f"{project.get('SPI', 0):.2f}")
                 with col3:
-                    st.metric("Budget", f"${project.get('Budget', 0)/1000:.0f}K")
+                    st.metric("Budget", format_currency(project.get('Budget', 0), currency_symbol, currency_postfix))
                 
                 st.write(f"**Status:** Critical performance issues requiring immediate intervention")
     else:
@@ -636,19 +700,19 @@ def main():
         st.markdown('<div class="section-header">🔍 Advanced Portfolio Analytics & Filtering</div>', unsafe_allow_html=True)
         
         # Create budget categories for filtering
-        def categorize_budget(budget):
+        def categorize_budget(budget, symbol=currency_symbol):
             if budget < 1000:
-                return "Under $1K"
+                return f"Under {symbol} 1K"
             elif budget < 10000:
-                return "$1K - $10K"
+                return f"{symbol} 1K - {symbol} 10K"
             elif budget < 50000:
-                return "$10K - $50K"
+                return f"{symbol} 10K - {symbol} 50K"
             elif budget < 100000:
-                return "$50K - $100K"
+                return f"{symbol} 50K - {symbol} 100K"
             elif budget < 500000:
-                return "$100K - $500K"
+                return f"{symbol} 100K - {symbol} 500K"
             else:
-                return "Over $500K"
+                return f"Over {symbol} 500K"
         
         df['Budget_Category'] = df['Budget'].apply(categorize_budget)
         
@@ -684,7 +748,7 @@ def main():
             )
         
         with col3:
-            budget_categories = ["Under $1K", "$1K - $10K", "$10K - $50K", "$50K - $100K", "$100K - $500K", "Over $500K"]
+            budget_categories = [f"Under {currency_symbol} 1K", f"{currency_symbol} 1K - {currency_symbol} 10K", f"{currency_symbol} 10K - {currency_symbol} 50K", f"{currency_symbol} 50K - {currency_symbol} 100K", f"{currency_symbol} 100K - {currency_symbol} 500K", f"Over {currency_symbol} 500K"]
             budget_filter = st.multiselect(
                 "Budget Range",
                 options=budget_categories,
@@ -758,11 +822,11 @@ def main():
             
             # Format budget columns
             if 'Budget' in display_df.columns:
-                display_df['Budget'] = display_df['Budget'].apply(lambda x: f"${x:,.0f}")
+                display_df['Budget'] = display_df['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             if 'Actual Cost' in display_df.columns:
-                display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: f"${x:,.0f}")
+                display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             if 'EAC' in display_df.columns:
-                display_df['EAC'] = display_df['EAC'].apply(lambda x: f"${x:,.0f}")
+                display_df['EAC'] = display_df['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
             
             # Format performance indices
             for col in ['CPI', 'SPI', 'SPIe']:
@@ -797,7 +861,7 @@ def main():
             with col3:
                 st.metric("📊 Avg SPIe", f"{filtered_df['SPIe'].mean():.3f}", help="Average Schedule Performance Index Estimate for filtered projects")
             with col4:
-                st.metric("💰 Total Budget", f"${filtered_df['Budget'].sum()/1000:.0f}K", help="Combined budget for filtered projects")
+                st.metric("💰 Total Budget", format_currency(filtered_df['Budget'].sum(), currency_symbol, currency_postfix), help="Combined budget for filtered projects")
     
     # Sidebar with executive styling
     with st.sidebar:
@@ -843,7 +907,7 @@ def main():
         
         **Key Insights:**
         - {metrics['critical_projects']} projects need immediate attention
-        - ${metrics['forecast_overrun']/1000:.0f}K projected overrun
+        - {format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} projected overrun
         - {metrics['overrun_percentage']:.1f}% budget variance
         """)
 
