@@ -1140,7 +1140,11 @@ def main():
                     col1, col2, col3, col4 = st.columns(4)
 
                     with col1:
-                        use_quarterly = st.checkbox("Use Quarterly View", value=False, key="cash_flow_quarterly")
+                        time_period = st.selectbox("Time Period",
+                                                   options=["Month", "Quarter", "FY"],
+                                                   index=0,
+                                                   key="cash_flow_time_period",
+                                                   help="Month: Monthly view, Quarter: Quarterly view, FY: Financial Year (July-June)")
 
                     with col2:
                         # Determine available finish date options (prioritize expected over likely)
@@ -1159,12 +1163,21 @@ def main():
                             st.write(f"**Finish Date:** {finish_date_choice}")
 
                     with col3:
-                        use_eac = st.checkbox("Use EAC instead of BAC", value=False, key="cash_flow_use_eac")
+                        cash_flow_type = st.radio("Cash Flow Type",
+                                                  options=["Plan", "Predicted", "Both"],
+                                                  index=0,
+                                                  key="cash_flow_type",
+                                                  help="Plan: BAC + OD, Predicted: EAC + LD, Both: Line chart comparing both")
 
                     with col4:
                         st.write("**Configuration:**")
-                        st.write("📊 Monthly" if not use_quarterly else "📊 Quarterly")
-                        st.write("💰 EAC" if use_eac else "💰 BAC")
+                        st.write(f"📊 {time_period}")
+                        if cash_flow_type == "Plan":
+                            st.write("💰 BAC/OD")
+                        elif cash_flow_type == "Predicted":
+                            st.write("💰 BAC/LD")
+                        else:  # Both
+                            st.write("💰 BAC/OD vs BAC/LD")
 
                     # Show expected date validation info if available
                     if expected_date_info:
@@ -1191,135 +1204,254 @@ def main():
                             df_cash = df_cash.dropna(subset=[start_date_col, finish_col])
 
                             if len(df_cash) > 0:
-                                # Calculate cash flow for each project
-                                cash_flow_data = []
+                                def get_financial_year(date):
+                                    """Get financial year string for a date (FY starts July 1st)"""
+                                    if date.month >= 7:  # July onwards = start of FY
+                                        return f"FY{date.year + 1}"  # e.g., July 2024 = FY2025
+                                    else:  # Jan-June = end of previous FY
+                                        return f"FY{date.year}"  # e.g., March 2024 = FY2024
 
-                                for idx, row in df_cash.iterrows():
-                                    start_date = row[start_date_col]
-                                    finish_date = row[finish_col]
+                                def get_period_key(date, time_period):
+                                    """Get period key based on time period selection"""
+                                    if time_period == "Month":
+                                        return date.strftime("%b-%Y")
+                                    elif time_period == "Quarter":
+                                        quarter = f"Q{((date.month - 1) // 3) + 1}-{date.year}"
+                                        return quarter
+                                    else:  # FY
+                                        return get_financial_year(date)
 
-                                    # Use EAC or BAC based on toggle
-                                    if use_eac and 'EAC' in row and pd.notna(row['EAC']) and row['EAC'] > 0:
-                                        budget = row['EAC']
-                                        budget_type = "EAC"
-                                    else:
-                                        budget = row.get('Budget', 0)
-                                        budget_type = "BAC"
+                                def calculate_cash_flow_for_scenario(df_cash, scenario_type):
+                                    """Calculate cash flow for Plan (BAC/OD) or Predicted (BAC/LD) scenario"""
+                                    cash_flow_data = []
 
-                                    if pd.notna(start_date) and pd.notna(finish_date) and budget > 0:
-                                        # Calculate project duration in months
-                                        duration_months = max(1, (finish_date - start_date).days / 30.44)  # Average days per month
-                                        monthly_cash_flow = budget / duration_months
+                                    for idx, row in df_cash.iterrows():
+                                        start_date = row[start_date_col]
 
-                                        # Generate monthly cash flow from start to finish
-                                        current_date = start_date.replace(day=1)  # Start of month
-                                        finish_month = finish_date.replace(day=1)
+                                        if pd.notna(start_date):
+                                            # Always use BAC (Budget) for both scenarios
+                                            budget = row.get('Budget', 0)  # BAC
 
-                                        while current_date <= finish_month:
-                                            if use_quarterly:
-                                                # Group by quarter
-                                                quarter = f"Q{((current_date.month - 1) // 3) + 1}-{current_date.year}"
-                                                period_key = quarter
-                                            else:
-                                                # Monthly view
-                                                period_key = current_date.strftime("%b-%Y")
+                                            if scenario_type == "Plan":
+                                                # Use Original Duration (OD)
+                                                if 'original_duration_months' in row and pd.notna(row.get('original_duration_months')):
+                                                    duration_months = max(1, row['original_duration_months'])
+                                                else:
+                                                    # Fallback: calculate from plan start to plan finish
+                                                    plan_finish = row.get('Plan Finish')
+                                                    if pd.notna(plan_finish):
+                                                        plan_finish_date = pd.to_datetime(plan_finish, errors='coerce')
+                                                        if pd.notna(plan_finish_date):
+                                                            duration_months = max(1, (plan_finish_date - start_date).days / 30.44)
+                                                        else:
+                                                            continue
+                                                    else:
+                                                        continue
+                                            else:  # Predicted
+                                                # Use Likely Duration (LD) with cap check
+                                                if 'forecast_duration' in row and pd.notna(row.get('forecast_duration')):
+                                                    ld = row['forecast_duration']
+                                                    # Get OD for cap calculation
+                                                    if 'original_duration_months' in row and pd.notna(row.get('original_duration_months')):
+                                                        od = row['original_duration_months']
+                                                    else:
+                                                        # Fallback: calculate OD from plan dates
+                                                        plan_finish = row.get('Plan Finish')
+                                                        if pd.notna(plan_finish):
+                                                            plan_finish_date = pd.to_datetime(plan_finish, errors='coerce')
+                                                            if pd.notna(plan_finish_date):
+                                                                od = max(1, (plan_finish_date - start_date).days / 30.44)
+                                                            else:
+                                                                od = 12  # Default fallback
+                                                        else:
+                                                            od = 12  # Default fallback
 
-                                            cash_flow_data.append({
-                                                'Period': period_key,
-                                                'Cash_Flow': monthly_cash_flow,
-                                                'Project': row.get('Project Name', 'Unknown'),
-                                                'Date': current_date
-                                            })
+                                                    # Cap LD to prevent timestamp overflow: min(LD, OD+48)
+                                                    duration_months = max(1, min(ld, od + 48))
+                                                else:
+                                                    continue
 
-                                            # Move to next month
-                                            if current_date.month == 12:
-                                                current_date = current_date.replace(year=current_date.year + 1, month=1)
-                                            else:
-                                                current_date = current_date.replace(month=current_date.month + 1)
+                                            if budget > 0 and duration_months > 0:
+                                                # Calculate monthly cash flow: BAC/Duration
+                                                monthly_cash_flow = budget / duration_months
+
+                                                # Generate monthly cash flow from plan start for duration months
+                                                current_date = start_date.replace(day=1)
+
+                                                for month in range(int(duration_months)):
+                                                    period_key = get_period_key(current_date, time_period)
+
+                                                    cash_flow_data.append({
+                                                        'Period': period_key,
+                                                        'Cash_Flow': monthly_cash_flow,
+                                                        'Project': row.get('Project Name', 'Unknown'),
+                                                        'Date': current_date,
+                                                        'Scenario': scenario_type
+                                                    })
+
+                                                    # Move to next month
+                                                    if current_date.month == 12:
+                                                        current_date = current_date.replace(year=current_date.year + 1, month=1)
+                                                    else:
+                                                        current_date = current_date.replace(month=current_date.month + 1)
+                                    return cash_flow_data
+
+                                # Calculate cash flow based on selected type
+                                if cash_flow_type == "Plan":
+                                    cash_flow_data = calculate_cash_flow_for_scenario(df_cash, "Plan")
+                                elif cash_flow_type == "Predicted":
+                                    cash_flow_data = calculate_cash_flow_for_scenario(df_cash, "Predicted")
+                                else:  # Both
+                                    plan_data = calculate_cash_flow_for_scenario(df_cash, "Plan")
+                                    predicted_data = calculate_cash_flow_for_scenario(df_cash, "Predicted")
+                                    cash_flow_data = plan_data + predicted_data
 
                                 if cash_flow_data:
-                                    # Create DataFrame and aggregate by period
                                     cash_df = pd.DataFrame(cash_flow_data)
 
-                                    if use_quarterly:
-                                        # For quarterly, aggregate by quarter and sum cash flows
-                                        period_cash_flow = cash_df.groupby('Period')['Cash_Flow'].sum().reset_index()
-                                        # Sort by year and quarter
+                                    def get_sort_key(period_str, time_period):
+                                        """Generate sort key for different time periods"""
+                                        if time_period == "Month":
+                                            # For "Jan-2024" format
+                                            try:
+                                                month_abbr, year = period_str.split('-')
+                                                month_num = {
+                                                    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+                                                    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+                                                }.get(month_abbr, 1)
+                                                return (int(year), month_num)
+                                            except:
+                                                return (2000, 1)
+                                        elif time_period == "Quarter":
+                                            # For "Q1-2024" format
+                                            try:
+                                                quarter, year = period_str.split('-')
+                                                quarter_num = int(quarter[1:])  # Extract number from Q1, Q2, etc.
+                                                return (int(year), quarter_num)
+                                            except:
+                                                return (2000, 1)
+                                        else:  # FY
+                                            # For "FY2024" format
+                                            try:
+                                                return (int(period_str[2:]), 1)  # Extract year from FY2024
+                                            except:
+                                                return (2000, 1)
+
+                                    if cash_flow_type == "Both":
+                                        # For Both option, create line chart with two series
+                                        period_cash_flow = cash_df.groupby(['Period', 'Scenario'])['Cash_Flow'].sum().reset_index()
                                         period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
-                                            lambda x: (int(x.split('-')[1]), int(x.split('-')[0][1:]))
+                                            lambda x: get_sort_key(x, time_period)
                                         )
                                         period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+
+                                        chart_title = f"Portfolio Cash Flow Comparison (Plan: BAC/OD vs Predicted: BAC/LD) - {time_period} View"
+
+                                        fig_cash_flow = px.line(
+                                            period_cash_flow,
+                                            x='Period',
+                                            y='Cash_Flow',
+                                            color='Scenario',
+                                            title=chart_title,
+                                            labels={
+                                                'Cash_Flow': f'Cash Flow ({currency_symbol})',
+                                                'Period': 'Period',
+                                                'Scenario': 'Scenario'
+                                            },
+                                            line_shape='spline',  # Makes the line smooth
+                                            markers=True
+                                        )
                                     else:
-                                        # For monthly, aggregate and sort chronologically
-                                        period_cash_flow = cash_df.groupby(['Period', 'Date'])['Cash_Flow'].sum().reset_index()
-                                        period_cash_flow = period_cash_flow.sort_values('Date')
-                                        period_cash_flow = period_cash_flow[['Period', 'Cash_Flow']]
+                                        # For Plan or Predicted, create bar chart
+                                        period_cash_flow = cash_df.groupby('Period')['Cash_Flow'].sum().reset_index()
+                                        period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
+                                            lambda x: get_sort_key(x, time_period)
+                                        )
+                                        period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
 
-                                    # Create the cash flow chart
-                                    budget_type_used = "EAC" if use_eac else "BAC"
-                                    chart_title = f"Portfolio Cash Flow ({'EAC' if use_eac else 'BAC'}) - {'Quarterly' if use_quarterly else 'Monthly'} View"
+                                        scenario_label = f"({'Plan: BAC/OD' if cash_flow_type == 'Plan' else 'Predicted: BAC/LD'})"
+                                        chart_title = f"Portfolio Cash Flow {scenario_label} - {time_period} View"
 
-                                    fig_cash_flow = px.bar(
-                                        period_cash_flow,
-                                        x='Period',
-                                        y='Cash_Flow',
-                                        title=chart_title,
-                                        labels={
-                                            'Cash_Flow': f'Cash Flow ({currency_symbol})',
-                                            'Period': 'Quarter' if use_quarterly else 'Month'
-                                        },
-                                        color='Cash_Flow',
-                                        color_continuous_scale='blues'
-                                    )
+                                        fig_cash_flow = px.bar(
+                                            period_cash_flow,
+                                            x='Period',
+                                            y='Cash_Flow',
+                                            title=chart_title,
+                                            labels={
+                                                'Cash_Flow': f'Cash Flow ({currency_symbol})',
+                                                'Period': time_period
+                                            },
+                                            color='Cash_Flow',
+                                            color_continuous_scale='blues'
+                                        )
 
                                     # Update layout for better visualization
                                     fig_cash_flow.update_layout(
                                         height=500,
-                                        showlegend=False,
+                                        showlegend=True if cash_flow_type == "Both" else False,
                                         xaxis=dict(
-                                            title='Quarter' if use_quarterly else 'Month',
+                                            title=time_period,
                                             tickangle=45
                                         ),
                                         yaxis=dict(
                                             title=f'Cash Flow ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
                                             tickformat=',.0f'
                                         ),
-                                        coloraxis_showscale=False
+                                        coloraxis_showscale=False if cash_flow_type != "Both" else True
                                     )
 
                                     # Update traces for better appearance
-                                    fig_cash_flow.update_traces(
-                                        texttemplate='%{y:,.0f}',
-                                        textposition='outside',
-                                        marker_line_width=0
-                                    )
+                                    if cash_flow_type != "Both":
+                                        fig_cash_flow.update_traces(
+                                            texttemplate='%{y:,.0f}',
+                                            textposition='outside'
+                                        )
 
                                     st.plotly_chart(fig_cash_flow, use_container_width=True)
 
-                                    # Summary statistics
-                                    col1, col2, col3, col4 = st.columns(4)
+                                    # Display summary metrics
+                                    col1, col2, col3 = st.columns(3)
                                     with col1:
-                                        st.metric("Total Projects", len(df_cash))
-                                    with col2:
-                                        total_cash_flow = period_cash_flow['Cash_Flow'].sum()
-                                        st.metric("Total Cash Flow", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
-                                    with col3:
-                                        avg_monthly = period_cash_flow['Cash_Flow'].mean()
-                                        st.metric(f"Avg {'Quarterly' if use_quarterly else 'Monthly'}", format_currency(avg_monthly, currency_symbol, currency_postfix, thousands=False))
-                                    with col4:
-                                        peak_period = period_cash_flow.loc[period_cash_flow['Cash_Flow'].idxmax(), 'Period']
-                                        peak_amount = period_cash_flow['Cash_Flow'].max()
-                                        st.metric("Peak Period", f"{peak_period}")
-                                        st.caption(f"Amount: {format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False)}")
+                                        if cash_flow_type == "Both":
+                                            # Show totals for both scenarios
+                                            plan_total = period_cash_flow[period_cash_flow['Scenario'] == 'Plan']['Cash_Flow'].sum()
+                                            predicted_total = period_cash_flow[period_cash_flow['Scenario'] == 'Predicted']['Cash_Flow'].sum()
+                                            st.metric("Plan Total (BAC/OD)", format_currency(plan_total, currency_symbol, currency_postfix, thousands=False))
+                                            st.metric("Predicted Total (BAC/LD)", format_currency(predicted_total, currency_symbol, currency_postfix, thousands=False))
+                                        else:
+                                            total_cash_flow = period_cash_flow['Cash_Flow'].sum()
+                                            scenario_name = "Plan (BAC/OD)" if cash_flow_type == "Plan" else "Predicted (BAC/LD)"
+                                            st.metric(f"Total Cash Flow - {scenario_name}", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
 
-                                    # Show period breakdown table
-                                    with st.expander("📋 Period Breakdown"):
-                                        # Format cash flow for display
-                                        display_cash_flow = period_cash_flow.copy()
-                                        display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
-                                            lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                        )
-                                        st.dataframe(display_cash_flow, use_container_width=True)
+                                    with col2:
+                                        if cash_flow_type != "Both":
+                                            avg_monthly = period_cash_flow['Cash_Flow'].mean()
+                                            st.metric("Average per Period", format_currency(avg_monthly, currency_symbol, currency_postfix, thousands=False))
+
+                                    with col3:
+                                        if cash_flow_type != "Both":
+                                            peak_period = period_cash_flow.loc[period_cash_flow['Cash_Flow'].idxmax(), 'Period']
+                                            peak_amount = period_cash_flow['Cash_Flow'].max()
+                                            st.metric(f"Peak Period: {peak_period}", format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False))
+
+                                    # Show detailed data table
+                                    with st.expander("📊 Detailed Cash Flow Data"):
+                                        if cash_flow_type == "Both":
+                                            # Show comparison table for both scenarios
+                                            display_cash_flow = period_cash_flow.copy()
+                                            display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
+                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                            )
+                                            # Pivot table to show Plan vs Predicted side by side
+                                            pivot_df = display_cash_flow.pivot_table(index='Period', columns='Scenario', values='Cash_Flow', fill_value=0)
+                                            st.dataframe(pivot_df, use_container_width=True)
+                                        else:
+                                            # Show single scenario table
+                                            display_cash_flow = period_cash_flow.copy()
+                                            display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
+                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                            )
+                                            st.dataframe(display_cash_flow, use_container_width=True)
 
                                 else:
                                     st.warning("No valid cash flow data could be generated from the selected projects.")
@@ -1340,6 +1472,189 @@ def main():
                         st.write("No date columns detected in the data.")
             else:
                 st.info("No data available for cash flow analysis.")
+
+        # Approvals Chart Expander
+        with st.expander("📈 Approvals Chart", expanded=False):
+            if len(filtered_df) > 0:
+                # Use specific column names for approvals chart (matching your data)
+                start_date_col = 'plan_start'
+                budget_col = 'bac'
+
+                if start_date_col in filtered_df.columns and budget_col in filtered_df.columns:
+                    # Controls for approvals chart
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        approval_time_period = st.selectbox("Approval Time Period",
+                                                          options=["Month", "Quarter", "FY"],
+                                                          index=0,
+                                                          key="approval_time_period",
+                                                          help="Month: Monthly approvals, Quarter: Quarterly approvals, FY: Financial Year (July-June)")
+
+                    with col2:
+                        st.write("**Configuration:**")
+                        st.write(f"📊 {approval_time_period}")
+                        st.write("💰 BAC by Approval Date")
+
+                    try:
+                        # Prepare data for approvals chart
+                        df_approvals = filtered_df.copy()
+
+                        # Parse approval date (using Plan Start as proxy for approval)
+                        df_approvals[start_date_col] = pd.to_datetime(df_approvals[start_date_col], errors='coerce')
+                        df_approvals = df_approvals.dropna(subset=[start_date_col, budget_col])
+
+                        if len(df_approvals) > 0:
+                            # Helper functions (reuse from cash flow)
+                            def get_financial_year_approvals(date):
+                                """Get financial year string for a date (FY starts July 1st)"""
+                                if date.month >= 7:  # July onwards = start of FY
+                                    return f"FY{date.year + 1}"
+                                else:  # Jan-June = end of previous FY
+                                    return f"FY{date.year}"
+
+                            def get_approval_period_key(date, time_period):
+                                """Get period key based on time period selection"""
+                                if time_period == "Month":
+                                    return date.strftime("%b-%Y")
+                                elif time_period == "Quarter":
+                                    quarter = f"Q{((date.month - 1) // 3) + 1}-{date.year}"
+                                    return quarter
+                                else:  # FY
+                                    return get_financial_year_approvals(date)
+
+                            def get_approval_sort_key(period_str, time_period):
+                                """Generate sort key for different time periods"""
+                                if time_period == "Month":
+                                    try:
+                                        month_abbr, year = period_str.split('-')
+                                        month_num = {
+                                            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+                                            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+                                        }.get(month_abbr, 1)
+                                        return (int(year), month_num)
+                                    except:
+                                        return (2000, 1)
+                                elif time_period == "Quarter":
+                                    try:
+                                        quarter, year = period_str.split('-')
+                                        quarter_num = int(quarter[1:])
+                                        return (int(year), quarter_num)
+                                    except:
+                                        return (2000, 1)
+                                else:  # FY
+                                    try:
+                                        return (int(period_str[2:]), 1)
+                                    except:
+                                        return (2000, 1)
+
+                            # Calculate approvals data
+                            approvals_data = []
+                            for idx, row in df_approvals.iterrows():
+                                approval_date = row[start_date_col]
+                                budget = row.get(budget_col, 0)
+
+                                if pd.notna(approval_date) and budget > 0:
+                                    period_key = get_approval_period_key(approval_date, approval_time_period)
+                                    approvals_data.append({
+                                        'Period': period_key,
+                                        'BAC': budget,
+                                        'Project': row.get('Project Name', 'Unknown'),
+                                        'Date': approval_date
+                                    })
+
+                            if approvals_data:
+                                # Create DataFrame and aggregate by period
+                                approvals_df = pd.DataFrame(approvals_data)
+                                period_approvals = approvals_df.groupby('Period')['BAC'].sum().reset_index()
+
+                                # Sort periods chronologically
+                                period_approvals['Sort_Key'] = period_approvals['Period'].apply(
+                                    lambda x: get_approval_sort_key(x, approval_time_period)
+                                )
+                                period_approvals = period_approvals.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+
+                                # Create the approvals chart
+                                chart_title = f"Project Approvals by BAC - {approval_time_period} View"
+
+                                fig_approvals = px.bar(
+                                    period_approvals,
+                                    x='Period',
+                                    y='BAC',
+                                    title=chart_title,
+                                    labels={
+                                        'BAC': f'Total BAC ({currency_symbol})',
+                                        'Period': approval_time_period
+                                    },
+                                    color='BAC',
+                                    color_continuous_scale='greens'
+                                )
+
+                                # Update layout for better visualization
+                                fig_approvals.update_layout(
+                                    height=400,
+                                    showlegend=False,
+                                    xaxis=dict(
+                                        title=approval_time_period,
+                                        tickangle=45
+                                    ),
+                                    yaxis=dict(
+                                        title=f'Total BAC ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
+                                        tickformat=',.0f'
+                                    ),
+                                    coloraxis_showscale=False
+                                )
+
+                                # Update traces for better appearance
+                                fig_approvals.update_traces(
+                                    texttemplate='%{y:,.0f}',
+                                    textposition='outside'
+                                )
+
+                                st.plotly_chart(fig_approvals, use_container_width=True)
+
+                                # Summary metrics
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    total_approved = period_approvals['BAC'].sum()
+                                    st.metric("Total Approved BAC", format_currency(total_approved, currency_symbol, currency_postfix, thousands=False))
+
+                                with col2:
+                                    avg_per_period = period_approvals['BAC'].mean()
+                                    st.metric(f"Average per {approval_time_period}", format_currency(avg_per_period, currency_symbol, currency_postfix, thousands=False))
+
+                                with col3:
+                                    peak_period = period_approvals.loc[period_approvals['BAC'].idxmax(), 'Period']
+                                    peak_amount = period_approvals['BAC'].max()
+                                    st.metric(f"Peak {approval_time_period}", f"{peak_period}")
+                                    st.caption(f"Amount: {format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False)}")
+
+                                # Show detailed data table
+                                with st.expander("📊 Detailed Approvals Data"):
+                                    display_approvals = period_approvals.copy()
+                                    display_approvals['BAC'] = display_approvals['BAC'].apply(
+                                        lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                    )
+                                    st.dataframe(display_approvals, use_container_width=True)
+
+                            else:
+                                st.warning("No valid approval data could be generated from the selected projects.")
+
+                        else:
+                            st.warning("No projects have valid approval dates and budget values.")
+
+                    except Exception as e:
+                        st.error(f"Error processing approvals data: {str(e)}")
+                        st.info("Please check that date and budget columns contain valid values.")
+
+                else:
+                    st.info("Approvals chart requires 'plan_start' and 'bac' columns.")
+                    st.info("Available columns:")
+                    available_cols = list(filtered_df.columns)
+                    for col in available_cols:
+                        st.write(f"• {col}")
+            else:
+                st.info("No data available for approvals analysis.")
 
         # Financial Summary Expander
         with st.expander("💰 Financial Summary", expanded=False):
