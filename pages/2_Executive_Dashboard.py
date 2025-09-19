@@ -168,10 +168,18 @@ st.markdown("""
     [data-testid="metric-container"] {
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid rgba(255,255,255,0.3);
-        padding: 1.5rem;
+        padding: 0.8rem;
         border-radius: 12px;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
         transition: all 0.3s ease;
+        min-height: 130px;
+        max-height: 160px;
+        overflow: visible;
+        width: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
     [data-testid="metric-container"]:hover {
@@ -180,11 +188,40 @@ st.markdown("""
     }
     
     [data-testid="metric-container"] > div > div > div > div {
-        font-size: 2.5rem !important;
+        font-size: 1.1rem !important;
         font-weight: 700 !important;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        word-wrap: break-word !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        max-width: 100% !important;
+        overflow-wrap: break-word !important;
+        hyphens: auto !important;
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* Additional responsive sizing for very long numbers */
+    @media (max-width: 1400px) {
+        [data-testid="metric-container"] > div > div > div > div {
+            font-size: 1rem !important;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        [data-testid="metric-container"] > div > div > div > div {
+            font-size: 0.95rem !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="metric-container"] > div > div > div > div {
+            font-size: 0.9rem !important;
+        }
     }
     
     /* Executive section headers */
@@ -518,38 +555,42 @@ def main():
     
     # Key Performance Indicators
     st.markdown('<div class="section-header">📈 Executive Portfolio Overview</div>', unsafe_allow_html=True)
-    
+
     col1, col2, col3, col4 = st.columns(4)
-    
+
+    # Calculate weighted Portfolio SPI and SPIe
+    portfolio_spi_weighted = (df['SPI'] * df['Budget']).sum() / df['Budget'].sum() if df['Budget'].sum() > 0 else 0
+    portfolio_spie_weighted = (df['SPIe'] * df['Budget']).sum() / df['Budget'].sum() if df['Budget'].sum() > 0 else 0
+
     with col1:
         st.metric(
             label="Total Projects",
             value=f"{metrics['total_projects']:,}",
             delta=None
         )
-    
+
     with col2:
         st.metric(
-            label="Total Budget",
-            value=format_currency(metrics['total_budget'], currency_symbol, currency_postfix),
-            delta=None
-        )
-    
-    with col3:
-        delta_color = "inverse" if metrics['forecast_overrun'] > 0 else "normal"
-        st.metric(
-            label="Forecast Overrun",
-            value=format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix),
-            delta=f"{metrics['overrun_percentage']:.1f}%",
-            delta_color=delta_color
-        )
-    
-    with col4:
-        st.metric(
             label="Portfolio CPI",
-            value=f"{metrics['portfolio_cpi']:.2f}",
+            value=f"{metrics['portfolio_cpi']:.3f}",
             delta=f"{(metrics['portfolio_cpi'] - 1) * 100:.1f}%",
             delta_color="inverse" if metrics['portfolio_cpi'] < 1 else "normal"
+        )
+
+    with col3:
+        st.metric(
+            label="Portfolio SPI",
+            value=f"{portfolio_spi_weighted:.3f}",
+            delta=f"{(portfolio_spi_weighted - 1) * 100:.1f}%",
+            delta_color="inverse" if portfolio_spi_weighted < 1 else "normal"
+        )
+
+    with col4:
+        st.metric(
+            label="Portfolio SPIe",
+            value=f"{portfolio_spie_weighted:.3f}",
+            delta=f"{(portfolio_spie_weighted - 1) * 100:.1f}%",
+            delta_color="inverse" if portfolio_spie_weighted < 1 else "normal"
         )
     
     # Performance Metrics Section
@@ -668,50 +709,55 @@ def main():
         
         # Financial alert
         if metrics['forecast_overrun'] > 0:
-            st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} over budget)")
+            st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix, thousands=False)} over budget)")
         else:
-            st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix)} (Under budget)")
+            st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
     
     # Critical Projects Section
-    st.markdown('<div class="section-header">🔥 Critical Projects - Executive Intervention Required</div>', unsafe_allow_html=True)
+    with st.expander("🔥 Critical Projects - Executive Intervention Required", expanded=True):
+        critical_projects = df[df['Health_Category'] == 'Critical'].copy()
+        critical_projects = critical_projects.sort_values('CPI').head(10)
+
+        if not critical_projects.empty:
+            # Prepare data for table display
+            critical_display_columns = ['Project Name', 'Budget', 'CPI', 'SPI', 'SPIe', 'Actual Cost', 'EAC']
+
+            # Check which columns are available
+            available_critical_columns = [col for col in critical_display_columns if col in critical_projects.columns]
+
+            if available_critical_columns:
+                critical_table = critical_projects[available_critical_columns].copy()
+
+                # Format the data for display
+                if 'Budget' in critical_table.columns:
+                    critical_table['Budget'] = critical_table['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                if 'Actual Cost' in critical_table.columns:
+                    critical_table['Actual Cost'] = critical_table['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                if 'EAC' in critical_table.columns:
+                    critical_table['EAC'] = critical_table['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+
+                # Format performance indices
+                for col in ['CPI', 'SPI', 'SPIe']:
+                    if col in critical_table.columns:
+                        critical_table[col] = critical_table[col].apply(lambda x: f"{x:.3f}")
+
+                # Style the table with critical project highlighting
+                def highlight_critical_projects(val):
+                    return 'background-color: #ffebee; color: #d32f2f; font-weight: bold;'
+
+                try:
+                    styled_critical_table = critical_table.style.applymap(highlight_critical_projects)
+                    st.dataframe(styled_critical_table, use_container_width=True, height=300)
+                except:
+                    # Fallback without styling
+                    st.dataframe(critical_table, use_container_width=True, height=300)
+
+                st.markdown("**⚠️ These projects require immediate executive intervention due to critical performance issues.**")
+            else:
+                st.info("Critical project data not available for display.")
+        else:
+            st.info("No critical projects found.")
     
-    critical_projects = df[df['Health_Category'] == 'Critical'].copy()
-    critical_projects = critical_projects.sort_values('CPI').head(10)
-    
-    if not critical_projects.empty:
-        for idx, project in critical_projects.iterrows():
-            with st.expander(f"🚨 {project.get('Project Name', 'Unknown Project')[:50]}..."):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("CPI", f"{project.get('CPI', 0):.2f}")
-                with col2:
-                    st.metric("SPI", f"{project.get('SPI', 0):.2f}")
-                with col3:
-                    st.metric("Budget", format_currency(project.get('Budget', 0), currency_symbol, currency_postfix))
-                
-                st.write(f"**Status:** Critical performance issues requiring immediate intervention")
-    else:
-        st.info("No critical projects found.")
-    
-    # Immediate Actions Required
-    st.markdown('<div class="section-header">🎯 Strategic Action Plan - Executive Directives</div>', unsafe_allow_html=True)
-    
-    actions = [
-        "Conduct emergency portfolio review with project managers for bottom 20 projects",
-        "Implement cost containment measures across all projects with CPI < 0.80",
-        "Reassess project priorities and consider portfolio rebalancing",
-        "Establish weekly steering committee for critical projects",
-        "Review resource allocation and project dependencies",
-        "Initiate risk mitigation strategies for schedule recovery",
-        "Consider project cancellation for consistently underperforming initiatives"
-    ]
-    
-    for i, action in enumerate(actions, 1):
-        st.markdown(f"""
-        <div class="action-item">
-            <strong>{i}.</strong> {action}
-        </div>
-        """, unsafe_allow_html=True)
     
     # Interactive Data Explorer
     with st.expander("📋 Executive Project Intelligence Center"):
@@ -848,61 +894,556 @@ def main():
         ]
         
         st.write(f"Showing {len(filtered_df)} projects (filtered from {len(df)} total)")
-        
-        # Display filtered data with enhanced columns
-        if org_columns:
-            display_columns = ['Project Name', org_columns[0], 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
-        else:
-            display_columns = ['Project Name', 'Organization', 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
-        
-        available_columns = [col for col in display_columns if col in filtered_df.columns]
-        
-        if available_columns:
-            # Format the dataframe for better display
-            display_df = filtered_df[available_columns].copy()
-            
-            # Format budget columns
-            if 'Budget' in display_df.columns:
-                display_df['Budget'] = display_df['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
-            if 'Actual Cost' in display_df.columns:
-                display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
-            if 'EAC' in display_df.columns:
-                display_df['EAC'] = display_df['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
-            
-            # Format performance indices
-            for col in ['CPI', 'SPI', 'SPIe']:
-                if col in display_df.columns:
-                    display_df[col] = display_df[col].apply(lambda x: f"{x:.3f}")
-            
-            # Color-code the health status
-            def highlight_health(val):
-                if val == 'Critical':
-                    return 'background-color: #ffebee'
-                elif val == 'At Risk':
-                    return 'background-color: #fff3e0'
-                elif val == 'Healthy':
-                    return 'background-color: #e8f5e8'
-                return ''
-            
-            if 'Health_Category' in display_df.columns:
-                styled_df = display_df.style.applymap(highlight_health, subset=['Health_Category'])
-                st.dataframe(styled_df, use_container_width=True, height=400)
+
+        # Projects Expander
+        with st.expander("📋 Projects", expanded=True):
+            # Display filtered data with enhanced columns
+            if org_columns:
+                display_columns = ['Project Name', org_columns[0], 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
             else:
-                st.dataframe(display_df, use_container_width=True, height=400)
-                
+                display_columns = ['Project Name', 'Organization', 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
+
+            available_columns = [col for col in display_columns if col in filtered_df.columns]
+
+            if available_columns:
+                # Format the dataframe for better display
+                display_df = filtered_df[available_columns].copy()
+
+                # Format budget columns
+                if 'Budget' in display_df.columns:
+                    display_df['Budget'] = display_df['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                if 'Actual Cost' in display_df.columns:
+                    display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                if 'EAC' in display_df.columns:
+                    display_df['EAC'] = display_df['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+
+                # Format performance indices
+                for col in ['CPI', 'SPI', 'SPIe']:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{x:.3f}")
+
+                # Color-code the health status
+                def highlight_health(val):
+                    if val == 'Critical':
+                        return 'background-color: #ffebee'
+                    elif val == 'At Risk':
+                        return 'background-color: #fff3e0'
+                    elif val == 'Healthy':
+                        return 'background-color: #e8f5e8'
+                    return ''
+
+                if 'Health_Category' in display_df.columns:
+                    styled_df = display_df.style.applymap(highlight_health, subset=['Health_Category'])
+                    st.dataframe(styled_df, use_container_width=True, height=400)
+                else:
+                    st.dataframe(display_df, use_container_width=True, height=400)
+
+        # Organizations Expander
+        with st.expander("🏢 Organizations", expanded=False):
+            # Get organization column name
+            org_col = org_columns[0] if org_columns else 'Organization'
+
+            if org_col in filtered_df.columns and len(filtered_df) > 0:
+                # Group by organization and calculate consolidated metrics
+                try:
+                    org_summary = filtered_df.groupby(org_col).agg({
+                        'Project Name': 'count',  # Project count
+                        'Budget': 'sum',          # Total budget
+                        'Actual Cost': 'sum',     # Total actual cost
+                        'EAC': 'sum',            # Total EAC
+                        'Health_Category': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'Unknown'  # Most common health status
+                    }).rename(columns={'Project Name': 'Project Count'})
+
+                    # Calculate weighted averages for CPI, SPI, SPIe
+                    org_weighted_metrics = filtered_df.groupby(org_col).apply(
+                        lambda group: pd.Series({
+                            'CPI': (group['CPI'] * group['Budget']).sum() / group['Budget'].sum() if group['Budget'].sum() > 0 else 0,
+                            'SPI': (group['SPI'] * group['Budget']).sum() / group['Budget'].sum() if group['Budget'].sum() > 0 else 0,
+                            'SPIe': (group['SPIe'] * group['Budget']).sum() / group['Budget'].sum() if group['Budget'].sum() > 0 else 0
+                        })
+                    )
+
+                    # Combine the metrics
+                    org_display = pd.concat([org_summary, org_weighted_metrics], axis=1)
+
+                    # Check if we have valid data
+                    if len(org_display) > 0:
+                        # Reorder columns to match project view (without Budget_Category)
+                        org_display_columns = ['Project Count', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
+                        org_display = org_display[org_display_columns]
+
+                        # Reset index to ensure unique indices for styling
+                        org_display = org_display.reset_index()
+
+                        # Format the organizational data for display
+                        org_display_formatted = org_display.copy()
+
+                        # Format budget columns
+                        if 'Budget' in org_display_formatted.columns:
+                            org_display_formatted['Budget'] = org_display_formatted['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                        if 'Actual Cost' in org_display_formatted.columns:
+                            org_display_formatted['Actual Cost'] = org_display_formatted['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                        if 'EAC' in org_display_formatted.columns:
+                            org_display_formatted['EAC'] = org_display_formatted['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+
+                        # Format performance indices
+                        for col in ['CPI', 'SPI', 'SPIe']:
+                            if col in org_display_formatted.columns:
+                                org_display_formatted[col] = org_display_formatted[col].apply(lambda x: f"{x:.3f}")
+
+                        # Apply health status styling with error handling
+                        try:
+                            if 'Health_Category' in org_display_formatted.columns and len(org_display_formatted) > 0:
+                                styled_org_df = org_display_formatted.style.applymap(highlight_health, subset=['Health_Category'])
+                                st.dataframe(styled_org_df, use_container_width=True, height=300)
+                            else:
+                                st.dataframe(org_display_formatted, use_container_width=True, height=300)
+                        except (KeyError, ValueError) as e:
+                            # Fallback to unstyled dataframe if styling fails
+                            st.dataframe(org_display_formatted, use_container_width=True, height=300)
+                    else:
+                        st.info("No organization data available with current filters.")
+
+                except Exception as e:
+                    st.error(f"Error processing organization data: {str(e)}")
+                    st.info("Unable to display organizational consolidation with current data.")
+            else:
+                if len(filtered_df) == 0:
+                    st.info("No projects available for organizational consolidation.")
+                else:
+                    st.info("Organization data not available for consolidation.")
+
+        # Portfolio Graph Expander
+        with st.expander("📊 Portfolio Graph", expanded=False):
+            # Get organization column name
+            org_col = org_columns[0] if org_columns else 'Organization'
+
+            if org_col in filtered_df.columns and len(filtered_df) > 0:
+                try:
+                    # Calculate total budget by organization
+                    org_budget_summary = filtered_df.groupby(org_col).agg({
+                        'Budget': 'sum'
+                    }).reset_index()
+
+                    # Sort by budget in descending order
+                    org_budget_summary = org_budget_summary.sort_values('Budget', ascending=True)  # ascending=True for horizontal bar chart
+
+                    if len(org_budget_summary) > 0:
+                        # Create horizontal bar chart
+                        fig_portfolio = px.bar(
+                            org_budget_summary,
+                            x='Budget',
+                            y=org_col,
+                            orientation='h',
+                            title="Total Budget by Organization",
+                            labels={'Budget': f'Total Budget ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})', org_col: 'Organization'},
+                            color='Budget',
+                            color_continuous_scale='viridis'
+                        )
+
+                        # Update layout for better visualization
+                        fig_portfolio.update_layout(
+                            height=max(400, len(org_budget_summary) * 40),  # Dynamic height based on number of organizations
+                            showlegend=False,
+                            xaxis=dict(tickformat=',.0f'),
+                            yaxis=dict(title=org_col),
+                            coloraxis_showscale=False
+                        )
+
+                        # Update traces for better appearance
+                        fig_portfolio.update_traces(
+                            texttemplate='%{x:,.0f}',
+                            textposition='outside',
+                            marker_line_width=0
+                        )
+
+                        st.plotly_chart(fig_portfolio, use_container_width=True)
+
+                        # Add summary statistics below the chart
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Organizations", len(org_budget_summary))
+                        with col2:
+                            st.metric("Largest Budget", format_currency(org_budget_summary['Budget'].max(), currency_symbol, currency_postfix, thousands=False))
+                        with col3:
+                            st.metric("Smallest Budget", format_currency(org_budget_summary['Budget'].min(), currency_symbol, currency_postfix, thousands=False))
+
+                    else:
+                        st.info("No organization budget data available to display.")
+
+                except Exception as e:
+                    st.error(f"Error creating portfolio graph: {str(e)}")
+                    st.info("Unable to display portfolio graph with current data.")
+            else:
+                if len(filtered_df) == 0:
+                    st.info("No projects available for portfolio graph.")
+                else:
+                    st.info("Organization data not available for portfolio graph.")
+
+        # Cash Flow Chart Expander
+        with st.expander("💰 Cash Flow Chart", expanded=False):
+            if len(filtered_df) > 0:
+                # Detect possible date columns
+                date_columns = []
+                for col in filtered_df.columns:
+                    if any(keyword in col.lower() for keyword in ['start', 'begin', 'finish', 'end', 'complete', 'date']):
+                        date_columns.append(col)
+
+                # Look for specific date column patterns
+                start_date_col = None
+                plan_finish_col = None
+                likely_finish_col = None
+                expected_finish_col = None
+
+                for col in date_columns:
+                    col_lower = col.lower()
+                    if 'start' in col_lower or 'begin' in col_lower:
+                        start_date_col = col
+                    elif 'expected' in col_lower and ('finish' in col_lower or 'end' in col_lower or 'complete' in col_lower):
+                        expected_finish_col = col
+                    elif 'likely' in col_lower and ('finish' in col_lower or 'end' in col_lower or 'complete' in col_lower):
+                        likely_finish_col = col
+                    elif 'plan' in col_lower and ('finish' in col_lower or 'end' in col_lower or 'complete' in col_lower):
+                        plan_finish_col = col
+                    elif 'finish' in col_lower or 'end' in col_lower or 'complete' in col_lower:
+                        if plan_finish_col is None:  # Use as plan finish if not already found
+                            plan_finish_col = col
+
+                if start_date_col and (plan_finish_col or likely_finish_col or expected_finish_col):
+                    # Validate expected finish dates (max 4 years from plan finish)
+                    valid_expected_finish_col = None
+                    expected_date_info = ""
+                    if expected_finish_col and plan_finish_col:
+                        try:
+                            # Parse dates for validation
+                            temp_df = filtered_df.copy()
+                            temp_df[plan_finish_col] = pd.to_datetime(temp_df[plan_finish_col], errors='coerce')
+                            temp_df[expected_finish_col] = pd.to_datetime(temp_df[expected_finish_col], errors='coerce')
+
+                            # Check if expected dates are within 4 years of plan dates
+                            valid_rows = temp_df.dropna(subset=[plan_finish_col, expected_finish_col])
+                            if len(valid_rows) > 0:
+                                date_diff_years = (valid_rows[expected_finish_col] - valid_rows[plan_finish_col]).dt.days / 365.25
+                                valid_dates = (date_diff_years <= 4) & (date_diff_years >= -1)
+                                if valid_dates.all():
+                                    valid_expected_finish_col = expected_finish_col
+                                    expected_date_info = f"✅ Expected dates validated ({len(valid_rows)} projects)"
+                                else:
+                                    invalid_count = (~valid_dates).sum()
+                                    expected_date_info = f"⚠️ Expected dates excluded ({invalid_count} projects exceed 4-year limit)"
+                            else:
+                                expected_date_info = "⚠️ No valid expected dates found"
+                        except Exception as e:
+                            expected_date_info = f"❌ Expected date validation failed: {str(e)}"
+
+                    # Controls for cash flow chart
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        use_quarterly = st.checkbox("Use Quarterly View", value=False, key="cash_flow_quarterly")
+
+                    with col2:
+                        # Determine available finish date options (prioritize expected over likely)
+                        finish_options = []
+                        if plan_finish_col:
+                            finish_options.append("Plan Finish")
+                        if valid_expected_finish_col:
+                            finish_options.append("Expected Finish")
+                        elif likely_finish_col:  # Only show likely if expected is not available
+                            finish_options.append("Likely Finish")
+
+                        if len(finish_options) > 1:
+                            finish_date_choice = st.selectbox("Finish Date Type", finish_options, key="cash_flow_finish_type")
+                        else:
+                            finish_date_choice = finish_options[0] if finish_options else "Plan Finish"
+                            st.write(f"**Finish Date:** {finish_date_choice}")
+
+                    with col3:
+                        use_eac = st.checkbox("Use EAC instead of BAC", value=False, key="cash_flow_use_eac")
+
+                    with col4:
+                        st.write("**Configuration:**")
+                        st.write("📊 Monthly" if not use_quarterly else "📊 Quarterly")
+                        st.write("💰 EAC" if use_eac else "💰 BAC")
+
+                    # Show expected date validation info if available
+                    if expected_date_info:
+                        st.info(expected_date_info)
+
+                    # Select finish date column based on choice
+                    if finish_date_choice == "Expected Finish" and valid_expected_finish_col:
+                        finish_col = valid_expected_finish_col
+                    elif finish_date_choice == "Likely Finish" and likely_finish_col:
+                        finish_col = likely_finish_col
+                    else:
+                        finish_col = plan_finish_col
+
+                    if finish_col:
+                        try:
+                            # Convert date columns to datetime
+                            df_cash = filtered_df.copy()
+
+                            # Parse dates with error handling
+                            df_cash[start_date_col] = pd.to_datetime(df_cash[start_date_col], errors='coerce')
+                            df_cash[finish_col] = pd.to_datetime(df_cash[finish_col], errors='coerce')
+
+                            # Remove rows with invalid dates
+                            df_cash = df_cash.dropna(subset=[start_date_col, finish_col])
+
+                            if len(df_cash) > 0:
+                                # Calculate cash flow for each project
+                                cash_flow_data = []
+
+                                for idx, row in df_cash.iterrows():
+                                    start_date = row[start_date_col]
+                                    finish_date = row[finish_col]
+
+                                    # Use EAC or BAC based on toggle
+                                    if use_eac and 'EAC' in row and pd.notna(row['EAC']) and row['EAC'] > 0:
+                                        budget = row['EAC']
+                                        budget_type = "EAC"
+                                    else:
+                                        budget = row.get('Budget', 0)
+                                        budget_type = "BAC"
+
+                                    if pd.notna(start_date) and pd.notna(finish_date) and budget > 0:
+                                        # Calculate project duration in months
+                                        duration_months = max(1, (finish_date - start_date).days / 30.44)  # Average days per month
+                                        monthly_cash_flow = budget / duration_months
+
+                                        # Generate monthly cash flow from start to finish
+                                        current_date = start_date.replace(day=1)  # Start of month
+                                        finish_month = finish_date.replace(day=1)
+
+                                        while current_date <= finish_month:
+                                            if use_quarterly:
+                                                # Group by quarter
+                                                quarter = f"Q{((current_date.month - 1) // 3) + 1}-{current_date.year}"
+                                                period_key = quarter
+                                            else:
+                                                # Monthly view
+                                                period_key = current_date.strftime("%b-%Y")
+
+                                            cash_flow_data.append({
+                                                'Period': period_key,
+                                                'Cash_Flow': monthly_cash_flow,
+                                                'Project': row.get('Project Name', 'Unknown'),
+                                                'Date': current_date
+                                            })
+
+                                            # Move to next month
+                                            if current_date.month == 12:
+                                                current_date = current_date.replace(year=current_date.year + 1, month=1)
+                                            else:
+                                                current_date = current_date.replace(month=current_date.month + 1)
+
+                                if cash_flow_data:
+                                    # Create DataFrame and aggregate by period
+                                    cash_df = pd.DataFrame(cash_flow_data)
+
+                                    if use_quarterly:
+                                        # For quarterly, aggregate by quarter and sum cash flows
+                                        period_cash_flow = cash_df.groupby('Period')['Cash_Flow'].sum().reset_index()
+                                        # Sort by year and quarter
+                                        period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
+                                            lambda x: (int(x.split('-')[1]), int(x.split('-')[0][1:]))
+                                        )
+                                        period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+                                    else:
+                                        # For monthly, aggregate and sort chronologically
+                                        period_cash_flow = cash_df.groupby(['Period', 'Date'])['Cash_Flow'].sum().reset_index()
+                                        period_cash_flow = period_cash_flow.sort_values('Date')
+                                        period_cash_flow = period_cash_flow[['Period', 'Cash_Flow']]
+
+                                    # Create the cash flow chart
+                                    budget_type_used = "EAC" if use_eac else "BAC"
+                                    chart_title = f"Portfolio Cash Flow ({'EAC' if use_eac else 'BAC'}) - {'Quarterly' if use_quarterly else 'Monthly'} View"
+
+                                    fig_cash_flow = px.bar(
+                                        period_cash_flow,
+                                        x='Period',
+                                        y='Cash_Flow',
+                                        title=chart_title,
+                                        labels={
+                                            'Cash_Flow': f'Cash Flow ({currency_symbol})',
+                                            'Period': 'Quarter' if use_quarterly else 'Month'
+                                        },
+                                        color='Cash_Flow',
+                                        color_continuous_scale='blues'
+                                    )
+
+                                    # Update layout for better visualization
+                                    fig_cash_flow.update_layout(
+                                        height=500,
+                                        showlegend=False,
+                                        xaxis=dict(
+                                            title='Quarter' if use_quarterly else 'Month',
+                                            tickangle=45
+                                        ),
+                                        yaxis=dict(
+                                            title=f'Cash Flow ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
+                                            tickformat=',.0f'
+                                        ),
+                                        coloraxis_showscale=False
+                                    )
+
+                                    # Update traces for better appearance
+                                    fig_cash_flow.update_traces(
+                                        texttemplate='%{y:,.0f}',
+                                        textposition='outside',
+                                        marker_line_width=0
+                                    )
+
+                                    st.plotly_chart(fig_cash_flow, use_container_width=True)
+
+                                    # Summary statistics
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    with col1:
+                                        st.metric("Total Projects", len(df_cash))
+                                    with col2:
+                                        total_cash_flow = period_cash_flow['Cash_Flow'].sum()
+                                        st.metric("Total Cash Flow", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
+                                    with col3:
+                                        avg_monthly = period_cash_flow['Cash_Flow'].mean()
+                                        st.metric(f"Avg {'Quarterly' if use_quarterly else 'Monthly'}", format_currency(avg_monthly, currency_symbol, currency_postfix, thousands=False))
+                                    with col4:
+                                        peak_period = period_cash_flow.loc[period_cash_flow['Cash_Flow'].idxmax(), 'Period']
+                                        peak_amount = period_cash_flow['Cash_Flow'].max()
+                                        st.metric("Peak Period", f"{peak_period}")
+                                        st.caption(f"Amount: {format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False)}")
+
+                                    # Show period breakdown table
+                                    with st.expander("📋 Period Breakdown"):
+                                        # Format cash flow for display
+                                        display_cash_flow = period_cash_flow.copy()
+                                        display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
+                                            lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                        )
+                                        st.dataframe(display_cash_flow, use_container_width=True)
+
+                                else:
+                                    st.warning("No valid cash flow data could be generated from the selected projects.")
+                            else:
+                                st.warning("No projects have valid start and finish dates.")
+
+                        except Exception as e:
+                            st.error(f"Error processing cash flow data: {str(e)}")
+                            st.info("Please check that date columns contain valid date formats.")
+                    else:
+                        st.warning("Required finish date column not found.")
+                else:
+                    st.info("Cash flow chart requires start date and finish date columns. Available columns:")
+                    if date_columns:
+                        for col in date_columns:
+                            st.write(f"• {col}")
+                    else:
+                        st.write("No date columns detected in the data.")
+            else:
+                st.info("No data available for cash flow analysis.")
+
+        # Financial Summary Expander
+        with st.expander("💰 Financial Summary", expanded=False):
+            if len(filtered_df) > 0:
+                # Enhanced styling for Financial Summary
+                st.markdown("""
+                <style>
+                .financial-metric {
+                    font-size: 1.1rem;
+                    line-height: 1.4;
+                    margin-bottom: 15px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #007bff;
+                }
+                .financial-value {
+                    font-size: 1.3rem;
+                    font-weight: bold;
+                    color: #1f77b4;
+                    margin-top: 8px;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+
+                # Calculate portfolio totals with safe column access
+                total_budget = filtered_df.get('Budget', pd.Series([0])).sum()
+                total_actual_cost = filtered_df.get('Actual Cost', pd.Series([0])).sum()
+                total_earned_value = filtered_df.get('Earned Value', pd.Series([0])).sum()
+                total_planned_value = filtered_df.get('Plan Value', pd.Series([0])).sum()
+                total_eac = filtered_df.get('EAC', pd.Series([0])).sum()
+
+                # Calculate ETC as EAC - AC
+                total_etc = total_eac - total_actual_cost
+
+                # Row 1: Budget (BAC) and Actual Cost (AC)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if 'Budget' in filtered_df.columns and total_budget > 0:
+                        bac_formatted = format_currency(total_budget, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">💰 **Portfolio Budget (BAC)**<br><span class="financial-value">{bac_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">💰 **Portfolio Budget (BAC)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col2:
+                    if 'Actual Cost' in filtered_df.columns:
+                        ac_formatted = format_currency(total_actual_cost, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">💸 **Portfolio Actual Cost (AC)**<br><span class="financial-value">{ac_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">💸 **Portfolio Actual Cost (AC)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Row 2: Planned Value (PV) and Earned Value (EV)
+                col3, col4 = st.columns(2)
+                with col3:
+                    if 'Plan Value' in filtered_df.columns:
+                        pv_formatted = format_currency(total_planned_value, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">📊 **Portfolio Planned Value (PV)**<br><span class="financial-value">{pv_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">📊 **Portfolio Planned Value (PV)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col4:
+                    if 'Earned Value' in filtered_df.columns:
+                        ev_formatted = format_currency(total_earned_value, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">💎 **Portfolio Earned Value (EV)**<br><span class="financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">💎 **Portfolio Earned Value (EV)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Row 3: ETC and EAC
+                col5, col6 = st.columns(2)
+                with col5:
+                    if 'EAC' in filtered_df.columns and 'Actual Cost' in filtered_df.columns:
+                        etc_formatted = format_currency(total_etc, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">🔧 **Portfolio Estimate to Complete (ETC)**<br><span class="financial-value">{etc_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">🔧 **Portfolio Estimate to Complete (ETC)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col6:
+                    if 'EAC' in filtered_df.columns:
+                        eac_formatted = format_currency(total_eac, currency_symbol, currency_postfix, thousands=False)
+                        st.markdown(f'<div class="financial-metric">🎯 **Portfolio Estimate at Completion (EAC)**<br><span class="financial-value">{eac_formatted}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="financial-metric">🎯 **Portfolio Estimate at Completion (EAC)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+
+            else:
+                st.info("No data available for financial summary.")
+
         # Summary statistics for filtered data
         if len(filtered_df) > 0:
             st.markdown('<div class="section-header">📊 Filtered Portfolio Analytics</div>', unsafe_allow_html=True)
-            col1, col2, col3, col4 = st.columns(4)
-            
+            col1, col2, col3 = st.columns(3)
+
+            # Calculate weighted averages
+            total_budget = filtered_df['Budget'].sum()
+            weighted_cpi = (filtered_df['CPI'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
+            weighted_spi = (filtered_df['SPI'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
+            weighted_spie = (filtered_df['SPIe'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
+
             with col1:
-                st.metric("📈 Avg CPI", f"{filtered_df['CPI'].mean():.3f}", help="Average Cost Performance Index for filtered projects")
+                st.metric("📈 Avg CPI", f"{weighted_cpi:.3f}", help="Weighted Average Cost Performance Index for filtered projects (weighted by budget)")
             with col2:
-                st.metric("⏱️ Avg SPI", f"{filtered_df['SPI'].mean():.3f}", help="Average Schedule Performance Index for filtered projects")
+                st.metric("⏱️ Avg SPI", f"{weighted_spi:.3f}", help="Weighted Average Schedule Performance Index for filtered projects (weighted by budget)")
             with col3:
-                st.metric("📊 Avg SPIe", f"{filtered_df['SPIe'].mean():.3f}", help="Average Schedule Performance Index Estimate for filtered projects")
-            with col4:
-                st.metric("💰 Total Budget", format_currency(filtered_df['Budget'].sum(), currency_symbol, currency_postfix), help="Combined budget for filtered projects")
+                st.metric("📊 Avg SPIe", f"{weighted_spie:.3f}", help="Weighted Average Schedule Performance Index Estimate for filtered projects (weighted by budget)")
     
     # Sidebar with executive styling
     with st.sidebar:
@@ -929,9 +1470,16 @@ def main():
             )
         
         st.markdown('<div class="section-header">📈 Portfolio KPIs</div>', unsafe_allow_html=True)
-        st.metric("⭐ Average CPI", f"{df['CPI'].mean():.3f}", help="Portfolio Cost Performance Index")
-        st.metric("🎯 Average SPI", f"{df['SPI'].mean():.3f}", help="Portfolio Schedule Performance Index") 
-        st.metric("📊 Average SPIe", f"{df['SPIe'].mean():.3f}", help="Schedule Performance Index Estimate")
+
+        # Calculate weighted averages for sidebar KPIs
+        total_budget_sidebar = df['Budget'].sum()
+        weighted_cpi_sidebar = (df['CPI'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
+        weighted_spi_sidebar = (df['SPI'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
+        weighted_spie_sidebar = (df['SPIe'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
+
+        st.metric("⭐ Average CPI", f"{weighted_cpi_sidebar:.3f}", help="Weighted Portfolio Cost Performance Index (weighted by budget)")
+        st.metric("🎯 Average SPI", f"{weighted_spi_sidebar:.3f}", help="Weighted Portfolio Schedule Performance Index (weighted by budget)")
+        st.metric("📊 Average SPIe", f"{weighted_spie_sidebar:.3f}", help="Weighted Schedule Performance Index Estimate (weighted by budget)")
         st.metric("🏢 Total Projects", len(df), help="Active projects in portfolio")
         
         # Add executive summary
@@ -944,7 +1492,7 @@ def main():
         
         **Key Insights:**
         - {metrics['critical_projects']} projects need immediate attention
-        - {format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix)} projected overrun
+        - {format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix, thousands=False)} projected overrun
         - {metrics['overrun_percentage']:.1f}% budget variance
         """)
 
