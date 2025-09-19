@@ -595,61 +595,131 @@ def main():
     
     # Performance Metrics Section
     st.markdown('<div class="section-header">⚡ Strategic Performance Indicators</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
+
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        # CPI Gauge
+        # CPI Gauge - Dial with Needle
         fig_cpi = go.Figure(go.Indicator(
-            mode = "gauge+number+delta",
+            mode = "gauge+number",
             value = metrics['portfolio_cpi'],
             domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Cost Performance Index (CPI)"},
-            delta = {'reference': 1.0},
+            title = {'text': "Cost Performance Index (CPI)", 'font': {'size': 14}},
+            number = {'font': {'size': 16}},
             gauge = {
-                'axis': {'range': [None, 1.5]},
-                'bar': {'color': "darkblue"},
+                'axis': {'range': [0, 2.0], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "rgba(0,0,0,0)"},  # Make bar transparent to show only needle
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
                 'steps': [
-                    {'range': [0, 0.8], 'color': "lightgray"},
-                    {'range': [0.8, 1.0], 'color': "yellow"},
-                    {'range': [1.0, 1.5], 'color': "lightgreen"}
+                    {'range': [0, 0.8], 'color': "#ff6b6b"},      # Red - Poor
+                    {'range': [0.8, 1.0], 'color': "#ffd93d"},    # Yellow - Caution
+                    {'range': [1.0, 1.5], 'color': "#6bcf7f"},    # Green - Good
+                    {'range': [1.5, 2.0], 'color': "#4ecdc4"}     # Teal - Excellent
                 ],
                 'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 0.9
+                    'line': {'color': "black", 'width': 3},
+                    'thickness': 0.8,
+                    'value': metrics['portfolio_cpi']
                 }
             }
         ))
-        fig_cpi.update_layout(height=300)
+        fig_cpi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_cpi, use_container_width=True)
     
     with col2:
-        # SPI Gauge
+        # SPI Gauge - Dial with Needle
         fig_spi = go.Figure(go.Indicator(
-            mode = "gauge+number+delta",
-            value = metrics['portfolio_spi'],
+            mode = "gauge+number",
+            value = portfolio_spi_weighted,
             domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Schedule Performance Index (SPI)"},
-            delta = {'reference': 1.0},
+            title = {'text': "Schedule Performance Index (SPI)", 'font': {'size': 14}},
+            number = {'font': {'size': 16}},
             gauge = {
-                'axis': {'range': [None, 1.5]},
-                'bar': {'color': "darkred"},
+                'axis': {'range': [0, 2.0], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "rgba(0,0,0,0)"},  # Make bar transparent to show only needle
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
                 'steps': [
-                    {'range': [0, 0.8], 'color': "lightgray"},
-                    {'range': [0.8, 1.0], 'color': "yellow"},
-                    {'range': [1.0, 1.5], 'color': "lightgreen"}
+                    {'range': [0, 0.8], 'color': "#ff6b6b"},      # Red - Behind Schedule
+                    {'range': [0.8, 1.0], 'color': "#ffd93d"},    # Yellow - Slightly Behind
+                    {'range': [1.0, 1.5], 'color': "#6bcf7f"},    # Green - On/Ahead Schedule
+                    {'range': [1.5, 2.0], 'color': "#4ecdc4"}     # Teal - Excellent
                 ],
                 'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 0.9
+                    'line': {'color': "black", 'width': 3},
+                    'thickness': 0.8,
+                    'value': portfolio_spi_weighted
                 }
             }
         ))
-        fig_spi.update_layout(height=300)
+        fig_spi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_spi, use_container_width=True)
-    
+
+    with col3:
+        # % Budget Used (AC/BAC) Gauge - Dial with Needle
+        portfolio_budget_used = (metrics['total_actual_cost'] / metrics['total_budget']) * 100 if metrics['total_budget'] > 0 else 0
+        fig_budget_used = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = portfolio_budget_used,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "% Budget Used (AC/BAC)", 'font': {'size': 14}},
+            number = {'suffix': "%", 'font': {'size': 16}},
+            gauge = {
+                'axis': {'range': [0, 150], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "rgba(0,0,0,0)"},  # Make bar transparent to show only needle
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 70], 'color': "#6bcf7f"},       # Green - Under Budget
+                    {'range': [70, 90], 'color': "#ffd93d"},      # Yellow - Approaching Budget
+                    {'range': [90, 110], 'color': "#ff9500"},     # Orange - At Budget
+                    {'range': [110, 150], 'color': "#ff6b6b"}     # Red - Over Budget
+                ],
+                'threshold': {
+                    'line': {'color': "black", 'width': 3},
+                    'thickness': 0.8,
+                    'value': portfolio_budget_used
+                }
+            }
+        ))
+        fig_budget_used.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+        st.plotly_chart(fig_budget_used, use_container_width=True)
+
+    with col4:
+        # % Earned Value (EV/BAC) Gauge - Dial with Needle
+        portfolio_earned_value_pct = (metrics['total_earned_value'] / metrics['total_budget']) * 100 if metrics['total_budget'] > 0 else 0
+        fig_earned_value = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = portfolio_earned_value_pct,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "% Earned Value (EV/BAC)", 'font': {'size': 14}},
+            number = {'suffix': "%", 'font': {'size': 16}},
+            gauge = {
+                'axis': {'range': [0, 120], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "rgba(0,0,0,0)"},  # Make bar transparent to show only needle
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 60], 'color': "#ff6b6b"},       # Red - Low Performance
+                    {'range': [60, 80], 'color': "#ffd93d"},      # Yellow - Below Target
+                    {'range': [80, 100], 'color': "#6bcf7f"},     # Green - Good Performance
+                    {'range': [100, 120], 'color': "#4ecdc4"}     # Teal - Excellent Performance
+                ],
+                'threshold': {
+                    'line': {'color': "black", 'width': 3},
+                    'thickness': 0.8,
+                    'value': portfolio_earned_value_pct
+                }
+            }
+        ))
+        fig_earned_value.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+        st.plotly_chart(fig_earned_value, use_container_width=True)
+
     # Project Health Distribution
     col1, col2 = st.columns([1, 1])
     
@@ -701,9 +771,12 @@ def main():
             color_discrete_sequence=['#3498db', '#e74c3c', '#f39c12', '#9b59b6', '#e74c3c']
         )
         fig_financial.update_layout(
-            height=400, 
+            height=400,
             showlegend=False,
-            yaxis=dict(tickformat='$,.0f')
+            yaxis=dict(
+                tickformat=',.0f',
+                title=f'Amount ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})'
+            )
         )
         st.plotly_chart(fig_financial, use_container_width=True)
         
@@ -714,7 +787,7 @@ def main():
             st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
     
     # Critical Projects Section
-    with st.expander("🔥 Critical Projects - Executive Intervention Required", expanded=True):
+    with st.expander("🔥 Critical Projects - Executive Intervention Required", expanded=False):
         critical_projects = df[df['Health_Category'] == 'Critical'].copy()
         critical_projects = critical_projects.sort_values('CPI').head(10)
 
@@ -760,7 +833,7 @@ def main():
     
     
     # Interactive Data Explorer
-    with st.expander("📋 Executive Project Intelligence Center"):
+    with st.expander("📋 Executive Project Intelligence Center", expanded=False):
         st.markdown('<div class="section-header">🔍 Advanced Portfolio Analytics & Filtering</div>', unsafe_allow_html=True)
         
         # Create budget categories for filtering
@@ -779,19 +852,29 @@ def main():
                 return f"Over {symbol} 500K"
         
         df['Budget_Category'] = df['Budget'].apply(categorize_budget)
-        
-        # Filters - Row 1
-        col1, col2, col3 = st.columns(3)
-        
+
+        # ═══════════════════════════════════════════════════════════════════
+        # 🎯 FILTER CONTROLS SECTION
+        # ═══════════════════════════════════════════════════════════════════
+
+        st.markdown("### 🔍 Filter Controls")
+
+        # ─────────────────────────────────────────────────────────────────
+        # BASIC FILTERS
+        # ─────────────────────────────────────────────────────────────────
+        st.markdown("**📊 Basic Filters**")
+        col1, col2 = st.columns(2)
+
         with col1:
-            # Organization filter (check if organization columns exist)
+            # Organization filter
             org_columns = [col for col in df.columns if 'org' in col.lower() or 'department' in col.lower() or 'division' in col.lower()]
             if org_columns:
                 org_options = df[org_columns[0]].dropna().unique().tolist()
                 organization_filter = st.multiselect(
-                    "Filter by Organization",
+                    "🏢 Organization",
                     options=org_options,
-                    default=org_options
+                    default=org_options,
+                    help="Filter projects by organization or department"
                 )
             else:
                 # Create dummy organizations for demonstration
@@ -799,90 +882,205 @@ def main():
                 orgs = ['Engineering', 'Infrastructure', 'IT', 'Construction', 'Energy', 'Healthcare']
                 df['Organization'] = np.random.choice(orgs, len(df))
                 organization_filter = st.multiselect(
-                    "Filter by Organization",
+                    "🏢 Organization",
                     options=orgs,
-                    default=orgs
+                    default=orgs,
+                    help="Filter projects by organization or department"
                 )
-        
+
         with col2:
             health_filter = st.multiselect(
-                "Filter by Health Status",
+                "🏥 Health Status",
                 options=['Critical', 'At Risk', 'Healthy'],
-                default=['Critical', 'At Risk', 'Healthy']
+                default=['Critical', 'At Risk', 'Healthy'],
+                help="Filter projects by their health status based on CPI and SPI"
             )
-        
-        with col3:
-            # Budget range toggle controls
-            st.write("**Budget Range Controls**")
 
-            # Lower budget range toggle
-            enable_lower_budget = st.checkbox("Enable Lower Budget Limit", value=False, key="lower_budget_toggle")
-            if enable_lower_budget:
-                min_budget = st.number_input(
-                    f"Minimum Budget ({currency_symbol})",
-                    min_value=0,
-                    value=0,
-                    step=1000,
-                    key="min_budget_value"
-                )
-            else:
-                min_budget = 0
+        st.markdown("")  # Add spacing
 
-            # Upper budget range toggle
-            enable_upper_budget = st.checkbox("Enable Upper Budget Limit", value=False, key="upper_budget_toggle")
-            if enable_upper_budget:
-                max_budget = st.number_input(
-                    f"Maximum Budget ({currency_symbol})",
-                    min_value=0,
-                    value=1000000,
-                    step=1000,
-                    key="max_budget_value"
-                )
-            else:
-                max_budget = float('inf')
-        
-        # Filters - Row 2
+        # ─────────────────────────────────────────────────────────────────
+        # PERFORMANCE FILTERS
+        # ─────────────────────────────────────────────────────────────────
+        st.markdown("**📈 Performance Filters**")
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            cpi_range = st.slider(
-                "CPI Range (All)",
-                min_value=0.0,
-                max_value=2.0,
-                value=(0.0, 2.0),
-                step=0.01,
-                help="Cost Performance Index: >1.0 is good, <1.0 indicates cost overrun. Default: All (0.0-2.0)"
-            )
-        
+            enable_cpi_filter = st.checkbox("Enable CPI Filter", value=False, key="cpi_filter_toggle")
+            if enable_cpi_filter:
+                cpi_range = st.slider(
+                    "💰 CPI Range",
+                    min_value=0.0,
+                    max_value=3.0,
+                    value=(0.0, 3.0),
+                    step=0.01,
+                    help="Cost Performance Index: >1.0 = under budget, <1.0 = over budget"
+                )
+            else:
+                cpi_range = (0.0, 3.0)  # Default to full range when disabled
+
         with col2:
-            spi_range = st.slider(
-                "SPI Range (All)",
-                min_value=0.0,
-                max_value=2.0,
-                value=(0.0, 2.0),
-                step=0.01,
-                help="Schedule Performance Index: >1.0 is ahead, <1.0 is behind schedule. Default: All (0.0-2.0)"
-            )
-        
+            enable_spi_filter = st.checkbox("Enable SPI Filter", value=False, key="spi_filter_toggle")
+            if enable_spi_filter:
+                spi_range = st.slider(
+                    "⏱️ SPI Range",
+                    min_value=0.0,
+                    max_value=3.0,
+                    value=(0.0, 3.0),
+                    step=0.01,
+                    help="Schedule Performance Index: >1.0 = ahead of schedule, <1.0 = behind schedule"
+                )
+            else:
+                spi_range = (0.0, 3.0)  # Default to full range when disabled
+
         with col3:
-            spie_range = st.slider(
-                "SPIe Range (All)",
-                min_value=0.0,
-                max_value=2.0,
-                value=(0.0, 2.0),
-                step=0.01,
-                help="Schedule Performance Index Estimate. Default: All (0.0-2.0)"
-            )
+            enable_spie_filter = st.checkbox("Enable SPIe Filter", value=False, key="spie_filter_toggle")
+            if enable_spie_filter:
+                spie_range = st.slider(
+                    "📊 SPIe Range",
+                    min_value=0.0,
+                    max_value=3.0,
+                    value=(0.0, 3.0),
+                    step=0.01,
+                    help="Schedule Performance Index Estimate"
+                )
+            else:
+                spie_range = (0.0, 3.0)  # Default to full range when disabled
+
+        st.markdown("")  # Add spacing
+
+        # ─────────────────────────────────────────────────────────────────
+        # BUDGET FILTERS
+        # ─────────────────────────────────────────────────────────────────
+        with st.expander("💵 Budget Range Filters", expanded=False):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                enable_lower_budget = st.checkbox("Enable Minimum Budget", value=False, key="lower_budget_toggle")
+                if enable_lower_budget:
+                    min_budget = st.number_input(
+                        f"Minimum Budget ({currency_symbol})",
+                        min_value=0,
+                        value=0,
+                        step=1000,
+                        key="min_budget_value",
+                        help="Set the minimum budget threshold"
+                    )
+                else:
+                    min_budget = 0
+
+            with col2:
+                enable_upper_budget = st.checkbox("Enable Maximum Budget", value=False, key="upper_budget_toggle")
+                if enable_upper_budget:
+                    max_budget = st.number_input(
+                        f"Maximum Budget ({currency_symbol})",
+                        min_value=0,
+                        value=1000000,
+                        step=1000,
+                        key="max_budget_value",
+                        help="Set the maximum budget threshold"
+                    )
+                else:
+                    max_budget = float('inf')
+
+        # ─────────────────────────────────────────────────────────────────
+        # DATE FILTERS (Based on Plan Start Date)
+        # ─────────────────────────────────────────────────────────────────
+        with st.expander("📅 Plan Start Date Filters", expanded=False):
+            # Check if plan_start column exists
+            plan_start_col = 'plan_start'
+            if plan_start_col in df.columns:
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    enable_start_date = st.checkbox("Enable Start Date Filter", value=False, key="start_date_toggle")
+                    if enable_start_date:
+                        try:
+                            temp_dates = pd.to_datetime(df[plan_start_col], errors='coerce').dropna()
+                            if len(temp_dates) > 0:
+                                min_date = temp_dates.min().date()
+                                max_date = temp_dates.max().date()
+                                start_date_filter = st.date_input(
+                                    "From Date",
+                                    value=min_date,
+                                    min_value=min_date,
+                                    max_value=max_date,
+                                    key="start_date_value",
+                                    help="Filter projects with plan start date from this date onwards"
+                                )
+                            else:
+                                start_date_filter = None
+                                st.warning("⚠️ No valid plan start dates found")
+                        except:
+                            start_date_filter = None
+                            st.error("❌ Error processing plan start dates")
+                    else:
+                        start_date_filter = None
+
+                with col2:
+                    enable_end_date = st.checkbox("Enable End Date Filter", value=False, key="end_date_toggle")
+                    if enable_end_date:
+                        try:
+                            temp_dates = pd.to_datetime(df[plan_start_col], errors='coerce').dropna()
+                            if len(temp_dates) > 0:
+                                min_date = temp_dates.min().date()
+                                max_date = temp_dates.max().date()
+                                end_date_filter = st.date_input(
+                                    "To Date",
+                                    value=max_date,
+                                    min_value=min_date,
+                                    max_value=max_date,
+                                    key="end_date_value",
+                                    help="Filter projects with plan start date up to this date"
+                                )
+                            else:
+                                end_date_filter = None
+                                st.warning("⚠️ No valid plan start dates found")
+                        except:
+                            end_date_filter = None
+                            st.error("❌ Error processing plan start dates")
+                    else:
+                        end_date_filter = None
+
+                selected_date_column = plan_start_col
+            else:
+                selected_date_column = None
+                start_date_filter = None
+                end_date_filter = None
+                st.info("ℹ️ Plan start date column not found in the dataset")
         
         # Apply filters
         filtered_df = df.copy()
-        
+
         # Apply organization filter
         if org_columns:
             filtered_df = filtered_df[filtered_df[org_columns[0]].isin(organization_filter)]
         else:
             filtered_df = filtered_df[filtered_df['Organization'].isin(organization_filter)]
-        
+
+        # Apply date range filter
+        if selected_date_column and (start_date_filter or end_date_filter):
+            try:
+                # Convert the selected date column to datetime
+                filtered_df[selected_date_column] = pd.to_datetime(filtered_df[selected_date_column], errors='coerce')
+
+                # Apply start date filter
+                if start_date_filter:
+                    start_datetime = pd.to_datetime(start_date_filter)
+                    filtered_df = filtered_df[
+                        (filtered_df[selected_date_column].isna()) |
+                        (filtered_df[selected_date_column] >= start_datetime)
+                    ]
+
+                # Apply end date filter
+                if end_date_filter:
+                    end_datetime = pd.to_datetime(end_date_filter)
+                    filtered_df = filtered_df[
+                        (filtered_df[selected_date_column].isna()) |
+                        (filtered_df[selected_date_column] <= end_datetime)
+                    ]
+            except Exception as e:
+                st.warning(f"Error applying date filter: {str(e)}")
+
         # Apply other filters
         filtered_df = filtered_df[
             (filtered_df['Health_Category'].isin(health_filter)) &
@@ -896,7 +1094,7 @@ def main():
         st.write(f"Showing {len(filtered_df)} projects (filtered from {len(df)} total)")
 
         # Projects Expander
-        with st.expander("📋 Projects", expanded=True):
+        with st.expander("📋 Projects", expanded=False):
             # Display filtered data with enhanced columns
             if org_columns:
                 display_columns = ['Project Name', org_columns[0], 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
@@ -1309,6 +1507,21 @@ def main():
                                 if cash_flow_data:
                                     cash_df = pd.DataFrame(cash_flow_data)
 
+                                    # Ensure Cash_Flow column is numeric and handle any data type issues
+                                    try:
+                                        cash_df['Cash_Flow'] = pd.to_numeric(cash_df['Cash_Flow'], errors='coerce')
+                                        # Remove any rows with invalid cash flow values
+                                        cash_df = cash_df.dropna(subset=['Cash_Flow'])
+                                        cash_df = cash_df[cash_df['Cash_Flow'].notna() & (cash_df['Cash_Flow'] != float('inf')) & (cash_df['Cash_Flow'] != float('-inf'))]
+
+                                        # Check if we have valid data after cleaning
+                                        if cash_df.empty:
+                                            st.warning("No valid cash flow data available after processing.")
+                                            cash_df = pd.DataFrame()
+                                    except Exception as e:
+                                        st.error(f"Error processing cash flow data types: {str(e)}")
+                                        cash_df = pd.DataFrame()  # Empty dataframe to prevent further errors
+
                                     def get_sort_key(period_str, time_period):
                                         """Generate sort key for different time periods"""
                                         if time_period == "Month":
@@ -1337,121 +1550,142 @@ def main():
                                             except:
                                                 return (2000, 1)
 
-                                    if cash_flow_type == "Both":
-                                        # For Both option, create line chart with two series
-                                        period_cash_flow = cash_df.groupby(['Period', 'Scenario'])['Cash_Flow'].sum().reset_index()
-                                        period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
-                                            lambda x: get_sort_key(x, time_period)
-                                        )
-                                        period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+                                    # Only proceed if we have valid cash flow data
+                                    if not cash_df.empty and len(cash_df) > 0:
+                                        if cash_flow_type == "Both":
+                                            # For Both option, create line chart with two series
+                                            period_cash_flow = cash_df.groupby(['Period', 'Scenario'])['Cash_Flow'].sum().reset_index()
+                                            period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
+                                                lambda x: get_sort_key(x, time_period)
+                                            )
+                                            period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
 
-                                        chart_title = f"Portfolio Cash Flow Comparison (Plan: BAC/OD vs Predicted: BAC/LD) - {time_period} View"
+                                            chart_title = f"Portfolio Cash Flow Comparison (Plan: BAC/OD vs Predicted: BAC/LD) - {time_period} View"
 
-                                        fig_cash_flow = px.line(
-                                            period_cash_flow,
-                                            x='Period',
-                                            y='Cash_Flow',
-                                            color='Scenario',
-                                            title=chart_title,
-                                            labels={
-                                                'Cash_Flow': f'Cash Flow ({currency_symbol})',
-                                                'Period': 'Period',
-                                                'Scenario': 'Scenario'
-                                            },
-                                            line_shape='spline',  # Makes the line smooth
-                                            markers=True
+                                            fig_cash_flow = px.line(
+                                                period_cash_flow,
+                                                x='Period',
+                                                y='Cash_Flow',
+                                                color='Scenario',
+                                                title=chart_title,
+                                                labels={
+                                                    'Cash_Flow': f'Cash Flow ({currency_symbol})',
+                                                    'Period': 'Period',
+                                                    'Scenario': 'Scenario'
+                                                },
+                                                line_shape='spline',  # Makes the line smooth
+                                                markers=True
+                                            )
+                                        else:
+                                            # For Plan or Predicted, create bar chart
+                                            period_cash_flow = cash_df.groupby('Period')['Cash_Flow'].sum().reset_index()
+                                            period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
+                                                lambda x: get_sort_key(x, time_period)
+                                            )
+                                            period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+
+                                            scenario_label = f"({'Plan: BAC/OD' if cash_flow_type == 'Plan' else 'Predicted: BAC/LD'})"
+                                            chart_title = f"Portfolio Cash Flow {scenario_label} - {time_period} View"
+
+                                            fig_cash_flow = px.bar(
+                                                period_cash_flow,
+                                                x='Period',
+                                                y='Cash_Flow',
+                                                title=chart_title,
+                                                labels={
+                                                    'Cash_Flow': f'Cash Flow ({currency_symbol})',
+                                                    'Period': time_period
+                                                },
+                                                color='Cash_Flow',
+                                                color_continuous_scale='blues'
+                                            )
+
+                                        # Update layout for better visualization
+                                        fig_cash_flow.update_layout(
+                                            height=500,
+                                            showlegend=True if cash_flow_type == "Both" else False,
+                                            xaxis=dict(
+                                                title=time_period,
+                                                tickangle=45
+                                            ),
+                                            yaxis=dict(
+                                                title=f'Cash Flow ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
+                                                tickformat=',.0f'
+                                            ),
+                                            coloraxis_showscale=False if cash_flow_type != "Both" else True
                                         )
+
+                                        # Update traces for better appearance
+                                        if cash_flow_type != "Both":
+                                            fig_cash_flow.update_traces(
+                                                texttemplate='%{y:,.0f}',
+                                                textposition='outside'
+                                            )
+
+                                        st.plotly_chart(fig_cash_flow, use_container_width=True)
+
+                                        # Display summary metrics
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            if cash_flow_type == "Both":
+                                                # Show totals for both scenarios
+                                                plan_total = period_cash_flow[period_cash_flow['Scenario'] == 'Plan']['Cash_Flow'].sum()
+                                                predicted_total = period_cash_flow[period_cash_flow['Scenario'] == 'Predicted']['Cash_Flow'].sum()
+                                                st.metric("Plan Total (BAC/OD)", format_currency(plan_total, currency_symbol, currency_postfix, thousands=False))
+                                                st.metric("Predicted Total (BAC/LD)", format_currency(predicted_total, currency_symbol, currency_postfix, thousands=False))
+                                            else:
+                                                total_cash_flow = period_cash_flow['Cash_Flow'].sum()
+                                                scenario_name = "Plan (BAC/OD)" if cash_flow_type == "Plan" else "Predicted (BAC/LD)"
+                                                st.metric(f"Total Cash Flow - {scenario_name}", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
+
+                                        with col2:
+                                            if cash_flow_type != "Both":
+                                                try:
+                                                    avg_monthly = period_cash_flow['Cash_Flow'].mean()
+                                                    if pd.isna(avg_monthly) or avg_monthly == float('inf') or avg_monthly == float('-inf'):
+                                                        st.metric("Average per Period", "N/A")
+                                                    else:
+                                                        st.metric("Average per Period", format_currency(avg_monthly, currency_symbol, currency_postfix, thousands=False))
+                                                except Exception as e:
+                                                    st.metric("Average per Period", "Error")
+                                                    st.error(f"Error calculating average: {str(e)}")
+
+                                        with col3:
+                                            if cash_flow_type != "Both":
+                                                try:
+                                                    if len(period_cash_flow) > 0 and not period_cash_flow['Cash_Flow'].empty:
+                                                        peak_amount = period_cash_flow['Cash_Flow'].max()
+                                                        peak_period = period_cash_flow.loc[period_cash_flow['Cash_Flow'].idxmax(), 'Period']
+                                                        if pd.isna(peak_amount) or peak_amount == float('inf') or peak_amount == float('-inf'):
+                                                            st.metric("Peak Period", "N/A")
+                                                        else:
+                                                            st.metric(f"Peak Period: {peak_period}", format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False))
+                                                    else:
+                                                        st.metric("Peak Period", "No Data")
+                                                except Exception as e:
+                                                    st.metric("Peak Period", "Error")
+                                                    st.error(f"Error calculating peak: {str(e)}")
+
+                                        # Show detailed data table
+                                        with st.expander("📊 Detailed Cash Flow Data", expanded=False):
+                                            if cash_flow_type == "Both":
+                                                # Show comparison table for both scenarios
+                                                display_cash_flow = period_cash_flow.copy()
+                                                display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
+                                                    lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                                )
+                                                # Pivot table to show Plan vs Predicted side by side
+                                                pivot_df = display_cash_flow.pivot_table(index='Period', columns='Scenario', values='Cash_Flow', fill_value=0)
+                                                st.dataframe(pivot_df, use_container_width=True)
+                                            else:
+                                                # Show single scenario table
+                                                display_cash_flow = period_cash_flow.copy()
+                                                display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
+                                                    lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                                )
+                                                st.dataframe(display_cash_flow, use_container_width=True)
                                     else:
-                                        # For Plan or Predicted, create bar chart
-                                        period_cash_flow = cash_df.groupby('Period')['Cash_Flow'].sum().reset_index()
-                                        period_cash_flow['Sort_Key'] = period_cash_flow['Period'].apply(
-                                            lambda x: get_sort_key(x, time_period)
-                                        )
-                                        period_cash_flow = period_cash_flow.sort_values('Sort_Key').drop('Sort_Key', axis=1)
-
-                                        scenario_label = f"({'Plan: BAC/OD' if cash_flow_type == 'Plan' else 'Predicted: BAC/LD'})"
-                                        chart_title = f"Portfolio Cash Flow {scenario_label} - {time_period} View"
-
-                                        fig_cash_flow = px.bar(
-                                            period_cash_flow,
-                                            x='Period',
-                                            y='Cash_Flow',
-                                            title=chart_title,
-                                            labels={
-                                                'Cash_Flow': f'Cash Flow ({currency_symbol})',
-                                                'Period': time_period
-                                            },
-                                            color='Cash_Flow',
-                                            color_continuous_scale='blues'
-                                        )
-
-                                    # Update layout for better visualization
-                                    fig_cash_flow.update_layout(
-                                        height=500,
-                                        showlegend=True if cash_flow_type == "Both" else False,
-                                        xaxis=dict(
-                                            title=time_period,
-                                            tickangle=45
-                                        ),
-                                        yaxis=dict(
-                                            title=f'Cash Flow ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
-                                            tickformat=',.0f'
-                                        ),
-                                        coloraxis_showscale=False if cash_flow_type != "Both" else True
-                                    )
-
-                                    # Update traces for better appearance
-                                    if cash_flow_type != "Both":
-                                        fig_cash_flow.update_traces(
-                                            texttemplate='%{y:,.0f}',
-                                            textposition='outside'
-                                        )
-
-                                    st.plotly_chart(fig_cash_flow, use_container_width=True)
-
-                                    # Display summary metrics
-                                    col1, col2, col3 = st.columns(3)
-                                    with col1:
-                                        if cash_flow_type == "Both":
-                                            # Show totals for both scenarios
-                                            plan_total = period_cash_flow[period_cash_flow['Scenario'] == 'Plan']['Cash_Flow'].sum()
-                                            predicted_total = period_cash_flow[period_cash_flow['Scenario'] == 'Predicted']['Cash_Flow'].sum()
-                                            st.metric("Plan Total (BAC/OD)", format_currency(plan_total, currency_symbol, currency_postfix, thousands=False))
-                                            st.metric("Predicted Total (BAC/LD)", format_currency(predicted_total, currency_symbol, currency_postfix, thousands=False))
-                                        else:
-                                            total_cash_flow = period_cash_flow['Cash_Flow'].sum()
-                                            scenario_name = "Plan (BAC/OD)" if cash_flow_type == "Plan" else "Predicted (BAC/LD)"
-                                            st.metric(f"Total Cash Flow - {scenario_name}", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
-
-                                    with col2:
-                                        if cash_flow_type != "Both":
-                                            avg_monthly = period_cash_flow['Cash_Flow'].mean()
-                                            st.metric("Average per Period", format_currency(avg_monthly, currency_symbol, currency_postfix, thousands=False))
-
-                                    with col3:
-                                        if cash_flow_type != "Both":
-                                            peak_period = period_cash_flow.loc[period_cash_flow['Cash_Flow'].idxmax(), 'Period']
-                                            peak_amount = period_cash_flow['Cash_Flow'].max()
-                                            st.metric(f"Peak Period: {peak_period}", format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False))
-
-                                    # Show detailed data table
-                                    with st.expander("📊 Detailed Cash Flow Data"):
-                                        if cash_flow_type == "Both":
-                                            # Show comparison table for both scenarios
-                                            display_cash_flow = period_cash_flow.copy()
-                                            display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
-                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                            )
-                                            # Pivot table to show Plan vs Predicted side by side
-                                            pivot_df = display_cash_flow.pivot_table(index='Period', columns='Scenario', values='Cash_Flow', fill_value=0)
-                                            st.dataframe(pivot_df, use_container_width=True)
-                                        else:
-                                            # Show single scenario table
-                                            display_cash_flow = period_cash_flow.copy()
-                                            display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
-                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                            )
-                                            st.dataframe(display_cash_flow, use_container_width=True)
+                                        st.warning("No valid cash flow data could be generated from the selected projects.")
 
                                 else:
                                     st.warning("No valid cash flow data could be generated from the selected projects.")
@@ -1556,9 +1790,18 @@ def main():
 
                                 if pd.notna(approval_date) and budget > 0:
                                     period_key = get_approval_period_key(approval_date, approval_time_period)
+
+                                    # Get financial values
+                                    ac = row.get('Actual Cost', 0)
+                                    ev = row.get('Earned Value', 0)
+                                    eac = row.get('EAC', 0)
+
                                     approvals_data.append({
                                         'Period': period_key,
                                         'BAC': budget,
+                                        'AC': ac,
+                                        'EV': ev,
+                                        'EAC': eac,
                                         'Project': row.get('Project Name', 'Unknown'),
                                         'Date': approval_date
                                     })
@@ -1566,7 +1809,18 @@ def main():
                             if approvals_data:
                                 # Create DataFrame and aggregate by period
                                 approvals_df = pd.DataFrame(approvals_data)
-                                period_approvals = approvals_df.groupby('Period')['BAC'].sum().reset_index()
+                                period_approvals = approvals_df.groupby('Period').agg({
+                                    'BAC': 'sum',
+                                    'AC': 'sum',
+                                    'EV': 'sum',
+                                    'EAC': 'sum',
+                                    'Project': 'count'  # Count number of projects
+                                }).rename(columns={'Project': 'Number of Projects'}).reset_index()
+
+                                # Calculate percentage columns
+                                period_approvals['% AC/BAC'] = (period_approvals['AC'] / period_approvals['BAC'] * 100).fillna(0)
+                                period_approvals['% EV/BAC'] = (period_approvals['EV'] / period_approvals['BAC'] * 100).fillna(0)
+                                period_approvals['% EAC/BAC'] = (period_approvals['EAC'] / period_approvals['BAC'] * 100).fillna(0)
 
                                 # Sort periods chronologically
                                 period_approvals['Sort_Key'] = period_approvals['Period'].apply(
@@ -1592,7 +1846,7 @@ def main():
 
                                 # Update layout for better visualization
                                 fig_approvals.update_layout(
-                                    height=400,
+                                    height=450,  # Increased height to accommodate labels
                                     showlegend=False,
                                     xaxis=dict(
                                         title=approval_time_period,
@@ -1602,39 +1856,36 @@ def main():
                                         title=f'Total BAC ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})',
                                         tickformat=',.0f'
                                     ),
-                                    coloraxis_showscale=False
+                                    coloraxis_showscale=False,
+                                    margin=dict(t=80, b=60, l=60, r=60)  # Add margins for text labels
                                 )
 
                                 # Update traces for better appearance
                                 fig_approvals.update_traces(
                                     texttemplate='%{y:,.0f}',
-                                    textposition='outside'
+                                    textposition='auto',  # Changed from 'outside' to 'auto' for better positioning
+                                    textfont=dict(size=10),  # Smaller text to fit better
+                                    cliponaxis=False  # Prevent clipping of text labels
                                 )
 
                                 st.plotly_chart(fig_approvals, use_container_width=True)
 
-                                # Summary metrics
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    total_approved = period_approvals['BAC'].sum()
-                                    st.metric("Total Approved BAC", format_currency(total_approved, currency_symbol, currency_postfix, thousands=False))
-
-                                with col2:
-                                    avg_per_period = period_approvals['BAC'].mean()
-                                    st.metric(f"Average per {approval_time_period}", format_currency(avg_per_period, currency_symbol, currency_postfix, thousands=False))
-
-                                with col3:
-                                    peak_period = period_approvals.loc[period_approvals['BAC'].idxmax(), 'Period']
-                                    peak_amount = period_approvals['BAC'].max()
-                                    st.metric(f"Peak {approval_time_period}", f"{peak_period}")
-                                    st.caption(f"Amount: {format_currency(peak_amount, currency_symbol, currency_postfix, thousands=False)}")
-
                                 # Show detailed data table
-                                with st.expander("📊 Detailed Approvals Data"):
+                                with st.expander("📊 Detailed Approvals Data", expanded=False):
                                     display_approvals = period_approvals.copy()
-                                    display_approvals['BAC'] = display_approvals['BAC'].apply(
-                                        lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                    )
+
+                                    # Format currency columns
+                                    for col in ['BAC', 'AC', 'EV', 'EAC']:
+                                        if col in display_approvals.columns:
+                                            display_approvals[col] = display_approvals[col].apply(
+                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                            )
+
+                                    # Format percentage columns
+                                    for col in ['% AC/BAC', '% EV/BAC', '% EAC/BAC']:
+                                        if col in display_approvals.columns:
+                                            display_approvals[col] = display_approvals[col].apply(lambda x: f"{x:.1f}%")
+
                                     st.dataframe(display_approvals, use_container_width=True)
 
                             else:
@@ -1741,6 +1992,164 @@ def main():
 
             else:
                 st.info("No data available for financial summary.")
+
+        # Durations Expander
+        with st.expander("⏱️ Durations", expanded=False):
+            if len(filtered_df) > 0:
+                # Enhanced styling for Duration metrics (same as Financial Summary)
+                st.markdown("""
+                <style>
+                .duration-metric {
+                    font-size: 1.1rem;
+                    line-height: 1.4;
+                    margin-bottom: 15px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #28a745;
+                }
+                .duration-value {
+                    font-size: 1.3rem;
+                    font-weight: bold;
+                    color: #28a745;
+                    margin-top: 8px;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+
+                # Check for duration columns and calculate metrics
+                od_col = 'original_duration_months'
+                ad_col = 'actual_duration_months'
+                ld_col = 'forecast_duration'
+                bac_col = 'Budget'
+
+                # Initialize variables
+                avg_od = wt_avg_od = avg_ad = wt_avg_ad = avg_ld = wt_avg_ld = None
+                avg_delay = wt_avg_delay = None
+
+                # Calculate OD metrics
+                if od_col in filtered_df.columns:
+                    od_data = filtered_df[filtered_df[od_col].notna() & (filtered_df[od_col] > 0)]
+                    if len(od_data) > 0:
+                        avg_od = od_data[od_col].mean()
+                        if bac_col in od_data.columns:
+                            total_bac = od_data[bac_col].sum()
+                            if total_bac > 0:
+                                wt_avg_od = (od_data[od_col] * od_data[bac_col]).sum() / total_bac
+
+                # Calculate AD metrics
+                if ad_col in filtered_df.columns:
+                    ad_data = filtered_df[filtered_df[ad_col].notna() & (filtered_df[ad_col] > 0)]
+                    if len(ad_data) > 0:
+                        avg_ad = ad_data[ad_col].mean()
+                        if bac_col in ad_data.columns:
+                            total_bac = ad_data[bac_col].sum()
+                            if total_bac > 0:
+                                wt_avg_ad = (ad_data[ad_col] * ad_data[bac_col]).sum() / total_bac
+
+                # Calculate LD metrics with upper limit check
+                if ld_col in filtered_df.columns:
+                    ld_data = filtered_df[filtered_df[ld_col].notna() & (filtered_df[ld_col] > 0)].copy()
+                    if len(ld_data) > 0:
+                        # Apply upper limit cap: min(LD, OD + 48)
+                        if od_col in ld_data.columns:
+                            # For projects with OD data, cap LD to OD + 48
+                            ld_data_with_od = ld_data[ld_data[od_col].notna() & (ld_data[od_col] > 0)].copy()
+                            if len(ld_data_with_od) > 0:
+                                ld_data_with_od[ld_col + '_capped'] = ld_data_with_od.apply(
+                                    lambda row: min(row[ld_col], row[od_col] + 48), axis=1
+                                )
+                                # Use capped values for calculation
+                                avg_ld = ld_data_with_od[ld_col + '_capped'].mean()
+                                if bac_col in ld_data_with_od.columns:
+                                    total_bac = ld_data_with_od[bac_col].sum()
+                                    if total_bac > 0:
+                                        wt_avg_ld = (ld_data_with_od[ld_col + '_capped'] * ld_data_with_od[bac_col]).sum() / total_bac
+                            else:
+                                # No OD data available, use original LD values
+                                avg_ld = ld_data[ld_col].mean()
+                                if bac_col in ld_data.columns:
+                                    total_bac = ld_data[bac_col].sum()
+                                    if total_bac > 0:
+                                        wt_avg_ld = (ld_data[ld_col] * ld_data[bac_col]).sum() / total_bac
+                        else:
+                            # No OD column available, use original LD values
+                            avg_ld = ld_data[ld_col].mean()
+                            if bac_col in ld_data.columns:
+                                total_bac = ld_data[bac_col].sum()
+                                if total_bac > 0:
+                                    wt_avg_ld = (ld_data[ld_col] * ld_data[bac_col]).sum() / total_bac
+
+                # Calculate Delay metrics
+                if avg_ld is not None and avg_od is not None:
+                    avg_delay = avg_ld - avg_od
+                if wt_avg_ld is not None and wt_avg_od is not None:
+                    wt_avg_delay = wt_avg_ld - wt_avg_od
+
+                # Row 1: Plan Duration (OD)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if avg_od is not None:
+                        st.markdown(f'<div class="duration-metric">📅 **Avg Plan Duration (OD)**<br><span class="duration-value">{round(avg_od)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">📅 **Avg Plan Duration (OD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col2:
+                    if wt_avg_od is not None:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Plan Duration (wt OD)**<br><span class="duration-value">{round(wt_avg_od)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Plan Duration (wt OD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Row 2: Actual Duration (AD)
+                col3, col4 = st.columns(2)
+                with col3:
+                    if avg_ad is not None:
+                        st.markdown(f'<div class="duration-metric">📊 **Avg Actual Duration (AD)**<br><span class="duration-value">{round(avg_ad)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">📊 **Avg Actual Duration (AD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col4:
+                    if wt_avg_ad is not None:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Actual Duration (Wt AD)**<br><span class="duration-value">{round(wt_avg_ad)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Actual Duration (Wt AD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Row 3: Likely Duration (LD)
+                col5, col6 = st.columns(2)
+                with col5:
+                    if avg_ld is not None:
+                        st.markdown(f'<div class="duration-metric">🔮 **Avg Likely Duration (LD)**<br><span class="duration-value">{round(avg_ld)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">🔮 **Avg Likely Duration (LD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col6:
+                    if wt_avg_ld is not None:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Likely Duration (wt LD)**<br><span class="duration-value">{round(wt_avg_ld)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Likely Duration (wt LD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Row 4: Delay
+                col7, col8 = st.columns(2)
+                with col7:
+                    if avg_delay is not None:
+                        delay_color = "#dc3545" if avg_delay > 0 else "#28a745"
+                        delay_sign = "+" if avg_delay > 0 else ""
+                        st.markdown(f'<div class="duration-metric">⏰ **Avg Delay (Avg LD - Avg OD)**<br><span class="duration-value" style="color: {delay_color};">{delay_sign}{round(avg_delay)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">⏰ **Avg Delay (Avg LD - Avg OD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+                with col8:
+                    if wt_avg_delay is not None:
+                        delay_color = "#dc3545" if wt_avg_delay > 0 else "#28a745"
+                        delay_sign = "+" if wt_avg_delay > 0 else ""
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Delay (wt Avg LD - wt Avg OD)**<br><span class="duration-value" style="color: {delay_color};">{delay_sign}{round(wt_avg_delay)} months</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="duration-metric">⚖️ **Wt Avg Delay (wt Avg LD - wt Avg OD)**<br><span class="duration-value">Not Available</span></div>', unsafe_allow_html=True)
+
+            else:
+                st.info("No data available for duration analysis.")
 
         # Summary statistics for filtered data
         if len(filtered_df) > 0:
