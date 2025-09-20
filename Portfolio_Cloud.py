@@ -2064,10 +2064,10 @@ def render_data_source_section():
     # Simple data source selection
     data_source = st.radio(
         "Select Data Source",
-        options=["Load JSON", "Load CSV"],
+        options=["Load JSON", "Load CSV", "Manual Entry"],
         index=0,
         key="data_source_radio",
-        help="Choose JSON for comprehensive data with configuration, or CSV for data-only imports"
+        help="Choose JSON for comprehensive data with configuration, CSV for data-only imports, or Manual Entry to create a blank table"
     )
     
     selected_table = None
@@ -2079,19 +2079,25 @@ def render_data_source_section():
         st.info("💡 Upload JSON files exported from this application or compatible EVM tools")
         file_types = ["json"]
         help_text = "JSON files contain both data and configuration settings"
-    else:  # Load CSV
+    elif data_source == "Load CSV":
         st.info("💡 Upload CSV files containing project data. Configuration will be set to defaults")
         file_types = ["csv"]
         help_text = "CSV files contain data only - you'll need to map columns to EVM fields"
+    else:  # Manual Entry
+        st.info("💡 Create a blank table that you can fill in manually with your project data")
+        file_types = None
+        help_text = "Start with an empty table and add your projects manually"
     
-    # Single unified file uploader
-    uploaded_file = st.file_uploader(
-        "Choose file",
-        type=file_types,
-        key="unified_file_uploader",
-        help=help_text,
-        label_visibility="visible"
-    )
+    # File uploader for JSON and CSV options only
+    uploaded_file = None
+    if data_source != "Manual Entry":
+        uploaded_file = st.file_uploader(
+            "Choose file",
+            type=file_types,
+            key="unified_file_uploader",
+            help=help_text,
+            label_visibility="visible"
+        )
     
     # Process uploaded file based on selection
     if uploaded_file is not None:
@@ -2202,7 +2208,57 @@ def render_data_source_section():
                     
             except Exception as e:
                 st.error(f"Failed to import CSV: {e}")
-    
+
+    # Handle Manual Entry option
+    elif data_source == "Manual Entry":
+        if st.button("📝 Create Demo Project", type="primary", help="Create a demo project to get started with manual entry"):
+            # Create dataframe with demo record for manual entry
+            blank_data = {
+                "Project ID": ["Demo"],
+                "Project": ["Demo"],
+                "Organization": ["Demo Org"],
+                "Project Manager": ["Demo Manager"],
+                "BAC": [1000.0],
+                "AC": [500.0],
+                "Plan Start": ["01/01/2025"],
+                "Plan Finish": ["31/10/2025"],
+                "Use_Manual_PV": [False],
+                "Manual_PV": [0.0],
+                "Use_Manual_EV": [True],
+                "Manual_EV": [500.0]
+            }
+
+            blank_df = pd.DataFrame(blank_data)
+            st.session_state.data_df = blank_df
+            st.session_state.data_loaded = True
+            st.session_state.original_filename = "Manual Entry"
+            st.session_state.file_type = 'manual'
+            st.session_state.config_dict.update({
+                "import_metadata": {
+                    "import_date": datetime.now().isoformat(),
+                    "source": "manual_entry",
+                    "original_filename": "Manual Entry"
+                },
+                "column_mappings": {
+                    'pid_col': 'Project ID',
+                    'pname_col': 'Project',
+                    'org_col': 'Organization',
+                    'pm_col': 'Project Manager',
+                    'bac_col': 'BAC',
+                    'ac_col': 'AC',
+                    'st_col': 'Plan Start',
+                    'fn_col': 'Plan Finish'
+                },
+                "curve_type": "S-curve",
+                "data_date": "30/05/2025",
+                "currency_symbol": "PKR",
+                "currency_postfix": "Million"
+            })
+
+            st.success("✅ Demo project created! You can now edit this demo record or add more projects using the Manual Entry section in the sidebar.")
+            st.cache_data.clear()
+            st.rerun()
+
     # Use processed data from session state if available
     elif st.session_state.data_df is not None and not st.session_state.data_df.empty:
         df = st.session_state.data_df
@@ -2215,6 +2271,14 @@ def render_data_source_section():
         # Get stored column mappings from session state (for display only)
         stored_mappings = st.session_state.config_dict.get('column_mappings', {})
         column_mapping = stored_mappings  # Don't re-render mapping for processed data
+
+    # Final check: if we have data in session state but haven't set return variables yet
+    if (df is None and st.session_state.data_df is not None and
+        not st.session_state.data_df.empty):
+        df = st.session_state.data_df
+        selected_table = DEFAULT_DATASET_TABLE
+        stored_mappings = st.session_state.config_dict.get('column_mappings', {})
+        column_mapping = stored_mappings
 
     st.markdown('</div>', unsafe_allow_html=True)
     return df, selected_table, column_mapping
