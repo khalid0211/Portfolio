@@ -2401,22 +2401,36 @@ def render_column_mapping_section(columns: List[str], stored_mapping: Dict = Non
     
     return mapping
 
-def render_manual_entry_section(selected_table: str):
-    """Render B. Manual Entry section."""
+def render_manual_entry_link():
+    """Render B. Manual Data Entry navigation link."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">B. Manual Entry</div>', unsafe_allow_html=True)
     
-    has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty) or selected_table
-    if not has_data:
-        st.warning("Select a database from Data Source section first.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-    
-    entry_mode = st.radio(
-        "Manual Entry Options",
-        ["Add New Project", "Edit Existing", "Delete Project"],
-        key="manual_entry_mode"
-    )
+    has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty)
+    if has_data:
+        num_projects = len(st.session_state.data_df)
+        st.info(f"📊 {num_projects} project(s) loaded")
+    else:
+        st.warning("⚠️ No project data loaded")
+
+    st.markdown("### 🚀 Professional Data Management")
+    st.markdown("Use our enhanced manual data entry interface with:")
+    st.markdown("• **Table view** with sorting and selection")
+    st.markdown("• **Advanced editing** with validation")
+    st.markdown("• **Bulk operations** and export features")
+
+    if st.button("📝 Open Manual Data Entry", type="primary", use_container_width=True):
+        st.switch_page("pages/Manual_Data_Entry.py")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def render_controls_section():
+    """Render C. Controls section."""
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">C. Controls</div>', unsafe_allow_html=True)
+
+    # Load saved controls if they exist
+    saved_controls = st.session_state.config_dict.get('controls', {})
     
     if entry_mode == "Add New Project":
         st.markdown("**Add New Project**")
@@ -3361,7 +3375,7 @@ def main():
             
             # Render all sidebar sections
             df, selected_table, column_mapping = render_data_source_section()
-            render_manual_entry_section(selected_table)
+            render_manual_entry_link()
             controls = render_controls_section()
             # Store controls in config_dict for JSON export
             st.session_state.config_dict['controls'] = controls

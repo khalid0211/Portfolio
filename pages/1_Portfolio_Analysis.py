@@ -2401,255 +2401,32 @@ def render_column_mapping_section(columns: List[str], stored_mapping: Dict = Non
     
     return mapping
 
-def render_manual_entry_section(selected_table: str):
-    """Render D. Manual Entry section."""
+def render_manual_entry_link():
+    """Render B. Manual Data Entry navigation link."""
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="section-header">D. Manual Entry</div>', unsafe_allow_html=True)
-    
-    has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty) or selected_table
-    if not has_data:
-        st.warning("Select a database from Data Source section first.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return
-    
-    entry_mode = st.radio(
-        "Manual Entry Options",
-        ["Add New Project", "Edit Existing", "Delete Project"],
-        key="manual_entry_mode"
-    )
-    
-    if entry_mode == "Add New Project":
-        st.markdown("**Add New Project**")
-        st.markdown("_Fill in the project details below:_")
+    st.markdown('<div class="section-header">B. Manual Entry</div>', unsafe_allow_html=True)
 
-        new_pid = st.text_input("🔹 **Project ID** (Required)", key="add_pid", max_chars=50,
-                               placeholder="e.g., PROJ-001")
-        new_pname = st.text_input("📋 **Project**", key="add_pname", max_chars=200,
-                                 placeholder="e.g., Project Name")
+    has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty)
+    if has_data:
+        num_projects = len(st.session_state.data_df)
+        st.info(f"📊 {num_projects} project(s) loaded")
+    else:
+        st.warning("⚠️ No project data loaded")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            new_bac = st.number_input("💰 **BAC (Total Budget)** (Required)",
-                                    min_value=0.01, value=1000.0, key="add_bac",
-                                    help="Budget at Completion - total planned project cost")
-        with col2:
-            new_ac = st.number_input("💸 **AC (Actual Cost)** (Required)",
-                                   min_value=0.0, value=0.0, key="add_ac",
-                                   help="Actual Cost to date - amount spent so far")
+    st.markdown("### 🚀 Professional Data Management")
+    st.markdown("Use our enhanced manual data entry interface with:")
+    st.markdown("• **Table view** with sorting and selection")
+    st.markdown("• **Advanced editing** with validation")
+    st.markdown("• **Bulk operations** and data export")
 
-        col3, col4 = st.columns(2)
-        with col3:
-            new_start = st.date_input("📅 **Plan Start** (Required)",
-                                    value=date.today(),
-                                    min_value=date(2000, 1, 1),
-                                    max_value=date(2035, 12, 31),
-                                    key="add_start")
-        with col4:
-            new_finish = st.date_input("🏁 **Plan Finish** (Required)",
-                                     value=date.today() + timedelta(days=365),
-                                     min_value=date(2000, 1, 1),
-                                     max_value=date(2035, 12, 31),
-                                     key="add_finish")
+    if st.button("🎯 **Open Manual Data Entry Page**",
+                type="primary",
+                use_container_width=True,
+                key="open_manual_entry"):
+        st.switch_page("pages/Manual_Data_Entry.py")
 
-        st.markdown("**Planned Value (PV) Configuration**")
-        use_manual_pv = st.checkbox("📊 Enter Planned Value Manually", key="add_use_manual_pv",
-                                   help="Check this to enter PV manually instead of automatic calculation")
-
-        manual_pv = None
-        if use_manual_pv:
-            manual_pv = st.number_input("💹 **Planned Value (PV)** (Manual)",
-                                      min_value=0.0, max_value=new_bac, value=0.0, key="add_manual_pv",
-                                      help="Manual Planned Value - will override automatic PV calculation")
-
-        st.markdown("**Earned Value (EV) Configuration**")
-        use_manual_ev = st.checkbox("📈 Enter Earned Value Manually", key="add_use_manual_ev",
-                                   help="Check this to enter EV manually instead of automatic calculation")
-
-        manual_ev = None
-        if use_manual_ev:
-            manual_ev = st.number_input("💰 **Earned Value (EV)** (Manual)",
-                                      min_value=0.0, max_value=new_bac, value=0.0, key="add_manual_ev",
-                                      help="Manual Earned Value - will override automatic EV calculation")
-
-        st.markdown("_Optional Information:_")
-        new_org = st.text_input("🏢 Organization", key="add_org", max_chars=200,
-                               placeholder="e.g., Organization Name")
-        new_pm = st.text_input("👤 Project Manager", key="add_pm", max_chars=200,
-                              placeholder="e.g., Name of PM")
-
-        if st.button("➕ Add Project", type="primary"):
-            if not new_pid.strip():
-                st.error("Project ID is required!")
-            elif new_finish <= new_start:
-                st.error("Plan Finish must be after Plan Start!")
-            else:
-                try:
-                    project_data = {
-                        "Project ID": new_pid.strip(),
-                        "Project": new_pname.strip(),
-                        "Organization": new_org.strip(),
-                        "Project Manager": new_pm.strip(),
-                        "BAC": new_bac,
-                        "AC": new_ac,
-                        "Plan Start": new_start.strftime("%Y-%m-%d"),
-                        "Plan Finish": new_finish.strftime("%Y-%m-%d"),
-                        "Use_Manual_PV": use_manual_pv,
-                        "Manual_PV": manual_pv if use_manual_pv else None,
-                        "Use_Manual_EV": use_manual_ev,
-                        "Manual_EV": manual_ev if use_manual_ev else None
-                    }
-                    insert_project_record(project_data, DEFAULT_DATASET_TABLE)
-                    st.success(f"✅ Project '{new_pid}' added successfully!")
-                    
-                    # Clear cache and rerun to refresh the form
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to add project: {e}")
-
-    elif entry_mode == "Edit Existing":
-        st.markdown("**Edit Existing Project**")
-        
-        edit_pid = st.text_input("Enter Project ID to edit", value=st.session_state.get("edit_pid_input", ""), key="edit_pid_input", max_chars=50)
-        
-        if edit_pid and st.button("🔍 Load Project", key="load_project_btn"):
-            project = get_project_record(edit_pid, DEFAULT_DATASET_TABLE)
-            if project:
-                st.session_state.edit_project = project
-                st.success(f"Project '{edit_pid}' loaded for editing")
-            else:
-                st.error(f"Project ID '{edit_pid}' not found")
-        
-        if "edit_project" in st.session_state:
-            project = st.session_state.edit_project
-            
-            st.markdown("**Current Project Details:**")
-            
-            edit_pname = st.text_input("Project", value=str(project.get("Project", "")), key="edit_pname")
-            edit_org = st.text_input("Organization", value=str(project.get("Organization", "")), key="edit_org")
-            edit_pm = st.text_input("Project Manager", value=str(project.get("Project Manager", "")), key="edit_pm")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                edit_bac = st.number_input("BAC (Budget)", min_value=0.01, value=float(project.get("BAC", 1000)), key="edit_bac")
-                edit_ac = st.number_input("AC (Actual Cost)", min_value=0.0, value=float(project.get("AC", 0)), key="edit_ac")
-            with col2:
-                try:
-                    edit_start = st.date_input("Plan Start",
-                                             value=parse_date_any(project.get("Plan Start", date.today())).date(),
-                                             min_value=date(2000, 1, 1),
-                                             max_value=date(2035, 12, 31),
-                                             key="edit_start")
-                    edit_finish = st.date_input("Plan Finish",
-                                              value=parse_date_any(project.get("Plan Finish", date.today())).date(),
-                                              min_value=date(2000, 1, 1),
-                                              max_value=date(2035, 12, 31),
-                                              key="edit_finish")
-                except:
-                    edit_start = st.date_input("Plan Start",
-                                             value=date.today(),
-                                             min_value=date(2000, 1, 1),
-                                             max_value=date(2035, 12, 31),
-                                             key="edit_start")
-                    edit_finish = st.date_input("Plan Finish",
-                                              value=date.today() + timedelta(days=365),
-                                              min_value=date(2000, 1, 1),
-                                              max_value=date(2035, 12, 31),
-                                              key="edit_finish")
-            
-            st.markdown("**Planned Value (PV) Configuration**")
-            current_use_manual = bool(project.get("Use_Manual_PV", False))
-            current_manual_pv = float(project.get("Manual_PV", 0)) if project.get("Manual_PV") else 0.0
-            
-            edit_use_manual_pv = st.checkbox("📊 Enter Planned Value Manually", 
-                                           value=current_use_manual, key="edit_use_manual_pv",
-                                           help="Check this to enter PV manually instead of automatic calculation")
-            
-            edit_manual_pv = None
-            if edit_use_manual_pv:
-                edit_manual_pv = st.number_input("💹 **Planned Value (PV)** (Manual)", 
-                                                min_value=0.0, max_value=edit_bac, value=current_manual_pv, key="edit_manual_pv",
-                                                help="Manual Planned Value - will override automatic PV calculation")
-            
-            st.markdown("**Earned Value (EV) Configuration**")
-            current_use_manual_ev = bool(project.get("Use_Manual_EV", False))
-            current_manual_ev = float(project.get("Manual_EV", 0)) if project.get("Manual_EV") else 0.0
-            
-            edit_use_manual_ev = st.checkbox("📈 Enter Earned Value Manually", 
-                                           value=current_use_manual_ev, key="edit_use_manual_ev",
-                                           help="Check this to enter EV manually instead of automatic calculation")
-            
-            edit_manual_ev = None
-            if edit_use_manual_ev:
-                edit_manual_ev = st.number_input("💰 **Earned Value (EV)** (Manual)", 
-                                                min_value=0.0, max_value=edit_bac, value=current_manual_ev, key="edit_manual_ev",
-                                                help="Manual Earned Value - will override automatic EV calculation")
-            
-            if st.button("💾 Update Project", type="primary", key="update_project_btn"):
-                if edit_finish <= edit_start:
-                    st.error("Plan Finish must be after Plan Start!")
-                else:
-                    try:
-                        updated_data = {
-                            "Project": edit_pname.strip(),
-                            "Organization": edit_org.strip(),
-                            "Project Manager": edit_pm.strip(),
-                            "BAC": edit_bac,
-                            "AC": edit_ac,
-                            "Plan Start": edit_start.strftime("%Y-%m-%d"),
-                            "Plan Finish": edit_finish.strftime("%Y-%m-%d"),
-                            "Use_Manual_PV": edit_use_manual_pv,
-                            "Manual_PV": edit_manual_pv if edit_use_manual_pv else None,
-                            "Use_Manual_EV": edit_use_manual_ev,
-                            "Manual_EV": edit_manual_ev if edit_use_manual_ev else None
-                        }
-                        update_project_record(edit_pid, updated_data, DEFAULT_DATASET_TABLE)
-                        st.success(f"✅ Project '{edit_pid}' updated successfully!")
-                        del st.session_state.edit_project
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to update project: {e}")
-    
-    else:  # Delete Project
-        st.markdown("**Delete Project**")
-        
-        delete_pid = st.text_input("Enter Project ID to delete", value=st.session_state.get("delete_pid_input", ""), key="delete_pid_input", max_chars=50)
-        
-        if delete_pid and st.button("🔍 Show Project Details", key="show_delete_project"):
-            project = get_project_record(delete_pid, DEFAULT_DATASET_TABLE)
-            if project:
-                st.session_state.delete_project = project
-                st.info("Project found. Review details below:")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.text_input("Project ID", value=str(project.get('Project ID', '')), disabled=True)
-                    st.text_input("Project", value=str(project.get('Project', '')), disabled=True)
-                with col2:
-                    st.text_input("BAC", value=str(project.get('BAC', '')), disabled=True)
-                    st.text_input("AC", value=str(project.get('AC', '')), disabled=True)
-            else:
-                st.error(f"Project ID '{delete_pid}' not found")
-        
-        if "delete_project" in st.session_state:
-            st.warning("⚠️ This action cannot be undone!")
-            if st.button("🗑️ DELETE PROJECT", type="secondary", key="delete_project_btn"):
-                if st.session_state.get("confirm_delete_project", False):
-                    try:
-                        delete_project_record(delete_pid, DEFAULT_DATASET_TABLE)
-                        st.success(f"✅ Project '{delete_pid}' deleted successfully!")
-                        del st.session_state.delete_project
-                        st.session_state.confirm_delete_project = False
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to delete project: {e}")
-                else:
-                    st.session_state.confirm_delete_project = True
-                    st.warning("Click DELETE PROJECT again to confirm")
-    
     st.markdown('</div>', unsafe_allow_html=True)
+
     
 def render_controls_section():
     """Render B. Controls section."""
@@ -3365,7 +3142,7 @@ def main():
             # Store controls in config_dict for JSON export
             st.session_state.config_dict['controls'] = controls
             enable_batch = render_batch_calculation_section()
-            render_manual_entry_section(selected_table)
+            render_manual_entry_link()
             llm_config = render_llm_provider_section()
             render_save_download_section()
             render_help_section()
