@@ -786,50 +786,359 @@ def main():
         else:
             st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
     
-    # Critical Projects Section
-    with st.expander("🔥 Critical Projects - Executive Intervention Required", expanded=False):
-        critical_projects = df[df['Health_Category'] == 'Critical'].copy()
-        critical_projects = critical_projects.sort_values('CPI').head(10)
+    # Project Spotlight Section
+    with st.expander("🎯 Project Spotlight", expanded=False):
+        # Dropdown for view selection
+        view_options = [
+            "1. Critical Projects",
+            "2. Top 10 Budget",
+            "3. Top 10 Earliest",
+            "4. Top 10 Latest",
+            "5. Top 10 Highest SPI",
+            "6. Top 10 Highest CPI",
+            "7. Top 10 Lowest SPI",
+            "8. Top 10 Lowest CPI",
+            "9. Top 10 Longest Duration",
+            "10. Top 10 Shortest Duration",
+            "11. Top 10 Longest Delay",
+            "12. Top 10 Highest ETC"
+        ]
 
-        if not critical_projects.empty:
-            # Prepare data for table display
-            critical_display_columns = ['Project Name', 'Budget', 'CPI', 'SPI', 'SPIe', 'Actual Cost', 'EAC']
+        selected_view = st.selectbox("Select View:", view_options, key="project_spotlight_view")
+
+        # Initialize variables
+        spotlight_projects = df.copy()
+        view_description = ""
+
+        # Filter and sort based on selected view
+        if selected_view == "1. Critical Projects":
+            spotlight_projects = df[df['Health_Category'] == 'Critical'].copy()
+            spotlight_projects = spotlight_projects.sort_values('CPI').head(10)
+            view_description = "⚠️ These projects require immediate executive intervention due to critical performance issues."
+
+        elif selected_view == "2. Top 10 Budget":
+            spotlight_projects = df.nlargest(10, 'Budget')
+            view_description = "💰 Projects with the highest budgets in the portfolio."
+
+        elif selected_view == "3. Top 10 Earliest":
+            # Check for possible Plan Start column names
+            plan_start_col = None
+            for col in ['Plan Start', 'plan_start', 'Start Date', 'start_date']:
+                if col in df.columns:
+                    plan_start_col = col
+                    break
+
+            if plan_start_col:
+                # Convert to datetime and sort for earliest dates (ascending)
+                df_temp = df.copy()
+                df_temp[f'{plan_start_col}_datetime'] = pd.to_datetime(df_temp[plan_start_col], errors='coerce')
+                valid_dates = df_temp.dropna(subset=[f'{plan_start_col}_datetime'])
+                if not valid_dates.empty:
+                    spotlight_projects = valid_dates.nsmallest(10, f'{plan_start_col}_datetime')
+                else:
+                    spotlight_projects = pd.DataFrame()
+            else:
+                spotlight_projects = pd.DataFrame()
+            view_description = "📅 Projects with the earliest planned start dates."
+
+        elif selected_view == "4. Top 10 Latest":
+            # Check for possible Plan Start column names
+            plan_start_col = None
+            for col in ['Plan Start', 'plan_start', 'Start Date', 'start_date']:
+                if col in df.columns:
+                    plan_start_col = col
+                    break
+
+            if plan_start_col:
+                # Convert to datetime and sort for latest dates (descending)
+                df_temp = df.copy()
+                df_temp[f'{plan_start_col}_datetime'] = pd.to_datetime(df_temp[plan_start_col], errors='coerce')
+                valid_dates = df_temp.dropna(subset=[f'{plan_start_col}_datetime'])
+                if not valid_dates.empty:
+                    spotlight_projects = valid_dates.nlargest(10, f'{plan_start_col}_datetime')
+                else:
+                    spotlight_projects = pd.DataFrame()
+            else:
+                spotlight_projects = pd.DataFrame()
+            view_description = "📅 Projects with the latest planned start dates."
+
+        elif selected_view == "5. Top 10 Highest SPI":
+            spotlight_projects = df.nlargest(10, 'SPI')
+            view_description = "🚀 Projects with the best schedule performance (ahead of schedule)."
+
+        elif selected_view == "6. Top 10 Highest CPI":
+            spotlight_projects = df.nlargest(10, 'CPI')
+            view_description = "💎 Projects with the best cost performance (under budget)."
+
+        elif selected_view == "7. Top 10 Lowest SPI":
+            spotlight_projects = df.nsmallest(10, 'SPI')
+            view_description = "⏰ Projects with the worst schedule performance (behind schedule)."
+
+        elif selected_view == "8. Top 10 Lowest CPI":
+            spotlight_projects = df.nsmallest(10, 'CPI')
+            view_description = "💸 Projects with the worst cost performance (over budget)."
+
+        elif selected_view == "9. Top 10 Longest Duration":
+            # Look for duration columns - try multiple possible names
+            duration_col = None
+            duration_types = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
+            for col in duration_types:
+                if col in df.columns:
+                    duration_col = col
+                    break
+
+            if duration_col:
+                spotlight_projects = df.nlargest(10, duration_col)
+                view_description = f"⏳ Projects with the longest duration ({duration_col})."
+            else:
+                spotlight_projects = pd.DataFrame()
+                view_description = "⏳ Duration data not available."
+
+        elif selected_view == "10. Top 10 Shortest Duration":
+            # Look for duration columns
+            duration_col = None
+            duration_types = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
+            for col in duration_types:
+                if col in df.columns:
+                    duration_col = col
+                    break
+
+            if duration_col:
+                spotlight_projects = df.nsmallest(10, duration_col)
+                view_description = f"⚡ Projects with the shortest duration ({duration_col})."
+            else:
+                spotlight_projects = pd.DataFrame()
+                view_description = "⚡ Duration data not available."
+
+        elif selected_view == "11. Top 10 Longest Delay":
+            # Calculate delay as LD-OD (Likely Duration - Original Duration)
+            df_temp = df.copy()
+
+            # Find LD (Likely Duration) column
+            ld_col = None
+            for col in ['Likely Dur', 'forecast_duration', 'LD']:
+                if col in df_temp.columns:
+                    ld_col = col
+                    break
+
+            # Find OD (Original Duration) column
+            od_col = None
+            for col in ['Original Dur', 'original_duration_months', 'OD']:
+                if col in df_temp.columns:
+                    od_col = col
+                    break
+
+            if ld_col and od_col:
+                # Calculate delay = LD - OD
+                df_temp['Delay'] = df_temp[ld_col] - df_temp[od_col]
+                # Filter projects: positive delay AND delay ≤ 3 × OD
+                delayed_projects = df_temp[
+                    (df_temp['Delay'] > 0) &
+                    (df_temp['Delay'] <= 3 * df_temp[od_col])
+                ]
+                if not delayed_projects.empty:
+                    spotlight_projects = delayed_projects.nlargest(10, 'Delay')
+                    view_description = f"🐌 Projects with the longest delays (LD - OD ≤ 3×OD, in months)."
+                else:
+                    spotlight_projects = pd.DataFrame()
+                    view_description = "🐌 No projects with valid delays found (within 3×OD limit)."
+            else:
+                # Fallback to lowest SPI if duration columns not available
+                spotlight_projects = df.nsmallest(10, 'SPI')
+                view_description = "🐌 Projects with the most significant schedule delays (using SPI)."
+
+        elif selected_view == "12. Top 10 Highest ETC":
+            # Calculate ETC if not available (ETC = EAC - AC)
+            df_temp = df.copy()
+            if 'ETC' not in df_temp.columns:
+                if 'EAC' in df_temp.columns and 'Actual Cost' in df_temp.columns:
+                    df_temp['ETC'] = df_temp['EAC'] - df_temp['Actual Cost']
+                elif 'EAC' in df_temp.columns and 'AC' in df_temp.columns:
+                    df_temp['ETC'] = df_temp['EAC'] - df_temp['AC']
+                else:
+                    df_temp['ETC'] = 0  # Default if we can't calculate
+
+            spotlight_projects = df_temp.nlargest(10, 'ETC')
+            view_description = "🔮 Projects with the highest remaining costs to complete (ETC = EAC - AC)."
+
+        # Ensure ETC column is available if needed (calculate if missing)
+        if 'ETC' not in spotlight_projects.columns and selected_view == "12. Top 10 Highest ETC":
+            if 'EAC' in spotlight_projects.columns and 'Actual Cost' in spotlight_projects.columns:
+                spotlight_projects['ETC'] = spotlight_projects['EAC'] - spotlight_projects['Actual Cost']
+            elif 'EAC' in spotlight_projects.columns and 'AC' in spotlight_projects.columns:
+                spotlight_projects['ETC'] = spotlight_projects['EAC'] - spotlight_projects['AC']
+
+        # Ensure Delay column is available if needed (calculate if missing)
+        if 'Delay' not in spotlight_projects.columns and selected_view == "11. Top 10 Longest Delay":
+            # Find LD (Likely Duration) column
+            ld_col = None
+            for col in ['Likely Dur', 'forecast_duration', 'LD']:
+                if col in spotlight_projects.columns:
+                    ld_col = col
+                    break
+
+            # Find OD (Original Duration) column
+            od_col = None
+            for col in ['Original Dur', 'original_duration_months', 'OD']:
+                if col in spotlight_projects.columns:
+                    od_col = col
+                    break
+
+            if ld_col and od_col:
+                # Calculate delay and apply 3×OD restriction
+                spotlight_projects['Delay'] = spotlight_projects[ld_col] - spotlight_projects[od_col]
+                # Cap delay at 3 times the original duration
+                spotlight_projects['Delay'] = spotlight_projects['Delay'].where(
+                    spotlight_projects['Delay'] <= 3 * spotlight_projects[od_col],
+                    3 * spotlight_projects[od_col]
+                )
+
+        # Display the results
+        if not spotlight_projects.empty:
+            # Prepare data for table display with appropriate columns for each view
+            # Base columns that should appear in all views
+            base_columns = ['Project Name']
+
+            # Financial columns (using different possible names)
+            financial_columns = []
+            # BAC (Budget at Completion)
+            for col in ['Budget', 'BAC', 'bac']:
+                if col in spotlight_projects.columns:
+                    financial_columns.append(col)
+                    break
+
+            # AC (Actual Cost)
+            for col in ['Actual Cost', 'AC', 'ac']:
+                if col in spotlight_projects.columns:
+                    financial_columns.append(col)
+                    break
+
+            # EV (Earned Value)
+            for col in ['Earned Value', 'EV', 'ev']:
+                if col in spotlight_projects.columns:
+                    financial_columns.append(col)
+                    break
+
+            # Performance columns
+            performance_columns = ['CPI', 'SPI', 'SPIe']
+
+            # View-specific columns
+            if selected_view in ["2. Top 10 Budget", "12. Top 10 Highest ETC"]:
+                specific_columns = ['ETC', 'EAC']
+                display_columns = base_columns + financial_columns + performance_columns + specific_columns
+
+            elif selected_view in ["3. Top 10 Earliest", "4. Top 10 Latest"]:
+                # Find the plan start column
+                plan_start_col = None
+                for col in ['Plan Start', 'plan_start', 'Start Date', 'start_date']:
+                    if col in spotlight_projects.columns:
+                        plan_start_col = col
+                        break
+
+                specific_columns = [plan_start_col] if plan_start_col else []
+                display_columns = base_columns + specific_columns + financial_columns + performance_columns
+
+            elif selected_view in ["9. Top 10 Longest Duration", "10. Top 10 Shortest Duration"]:
+                # Dynamically determine which duration column to show
+                duration_display_col = None
+                duration_types = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
+                for col in duration_types:
+                    if col in spotlight_projects.columns:
+                        duration_display_col = col
+                        break
+
+                specific_columns = [duration_display_col] if duration_display_col else []
+                display_columns = base_columns + specific_columns + financial_columns + performance_columns
+
+            elif selected_view == "11. Top 10 Longest Delay":
+                # For delay view, show Delay column plus original and likely durations
+                delay_columns = []
+
+                # Add Delay column if it exists
+                if 'Delay' in spotlight_projects.columns:
+                    delay_columns.append('Delay')
+
+                # Add original duration column
+                for col in ['Original Dur', 'original_duration_months', 'OD']:
+                    if col in spotlight_projects.columns:
+                        delay_columns.append(col)
+                        break
+
+                # Add actual duration column
+                for col in ['Actual Dur', 'actual_duration_months', 'AD']:
+                    if col in spotlight_projects.columns:
+                        delay_columns.append(col)
+                        break
+
+                # Add likely duration column
+                for col in ['Likely Dur', 'forecast_duration', 'LD']:
+                    if col in spotlight_projects.columns:
+                        delay_columns.append(col)
+                        break
+
+                display_columns = base_columns + delay_columns + financial_columns + performance_columns
+
+            else:
+                # Default view - include EAC
+                specific_columns = ['EAC']
+                display_columns = base_columns + financial_columns + performance_columns + specific_columns
+
+            # Remove None values and duplicates while preserving order
+            display_columns = [col for col in display_columns if col is not None]
+            display_columns = list(dict.fromkeys(display_columns))  # Remove duplicates while preserving order
 
             # Check which columns are available
-            available_critical_columns = [col for col in critical_display_columns if col in critical_projects.columns]
+            available_columns = [col for col in display_columns if col in spotlight_projects.columns]
 
-            if available_critical_columns:
-                critical_table = critical_projects[available_critical_columns].copy()
+            if available_columns:
+                spotlight_table = spotlight_projects[available_columns].copy()
 
-                # Format the data for display
-                if 'Budget' in critical_table.columns:
-                    critical_table['Budget'] = critical_table['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
-                if 'Actual Cost' in critical_table.columns:
-                    critical_table['Actual Cost'] = critical_table['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
-                if 'EAC' in critical_table.columns:
-                    critical_table['EAC'] = critical_table['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                # Format the data for display - handle all possible currency column names
+                currency_columns = ['Budget', 'BAC', 'bac', 'Actual Cost', 'AC', 'ac', 'Earned Value', 'EV', 'ev', 'EAC', 'ETC']
+                for col in currency_columns:
+                    if col in spotlight_table.columns:
+                        spotlight_table[col] = spotlight_table[col].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False) if pd.notna(x) else "N/A")
 
                 # Format performance indices
                 for col in ['CPI', 'SPI', 'SPIe']:
-                    if col in critical_table.columns:
-                        critical_table[col] = critical_table[col].apply(lambda x: f"{x:.3f}")
+                    if col in spotlight_table.columns:
+                        spotlight_table[col] = spotlight_table[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
 
-                # Style the table with critical project highlighting
-                def highlight_critical_projects(val):
-                    return 'background-color: #ffebee; color: #d32f2f; font-weight: bold;'
+                # Format dates if present - handle multiple possible date column names
+                date_columns = ['Plan Start', 'plan_start', 'Start Date', 'start_date']
+                for col in date_columns:
+                    if col in spotlight_table.columns:
+                        spotlight_table[col] = pd.to_datetime(spotlight_table[col], errors='coerce').dt.strftime('%Y-%m-%d')
 
-                try:
-                    styled_critical_table = critical_table.style.applymap(highlight_critical_projects)
-                    st.dataframe(styled_critical_table, use_container_width=True, height=300)
-                except:
-                    # Fallback without styling
-                    st.dataframe(critical_table, use_container_width=True, height=300)
+                # Format duration columns if present
+                duration_format_cols = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
+                for col in duration_format_cols:
+                    if col in spotlight_table.columns:
+                        spotlight_table[col] = spotlight_table[col].apply(lambda x: f"{x:.1f} months" if pd.notna(x) else "N/A")
 
-                st.markdown("**⚠️ These projects require immediate executive intervention due to critical performance issues.**")
+                # Format Delay column if present
+                if 'Delay' in spotlight_table.columns:
+                    spotlight_table['Delay'] = spotlight_table['Delay'].apply(lambda x: f"{x:.1f} months" if pd.notna(x) else "N/A")
+
+                # Apply conditional styling based on view type
+                if selected_view == "1. Critical Projects":
+                    # Style critical projects with red background
+                    def highlight_critical_projects(val):
+                        return 'background-color: #ffebee; color: #d32f2f; font-weight: bold;'
+                    try:
+                        styled_table = spotlight_table.style.applymap(highlight_critical_projects)
+                        st.dataframe(styled_table, use_container_width=True, height=300)
+                    except:
+                        st.dataframe(spotlight_table, use_container_width=True, height=300)
+                else:
+                    # Standard display for other views
+                    st.dataframe(spotlight_table, use_container_width=True, height=300)
+
+                st.markdown(f"**{view_description}**")
             else:
-                st.info("Critical project data not available for display.")
+                st.info("Required data columns not available for this view.")
         else:
-            st.info("No critical projects found.")
+            st.info(f"No data available for {selected_view.split('.')[1].strip()}.")
     
     
     # Interactive Data Explorer
