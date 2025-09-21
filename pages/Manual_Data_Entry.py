@@ -143,6 +143,8 @@ def validate_project_data(data: Dict[str, Any]) -> List[str]:
 
 def format_currency(value: float) -> str:
     """Format currency value with proper formatting."""
+    if value is None:
+        return ""
     return f"{value:,.2f}"
 
 # =============================================================================
@@ -289,9 +291,9 @@ def render_project_form(project_data: Dict[str, Any] = None, form_key: str = "pr
         # Row 5: Manual PV and Manual EV
         col7, col8 = st.columns(2)
         with col7:
-            manual_pv = st.number_input("Manual PV (Optional)", min_value=0.0, value=float(project_data.get("Manual_PV", 0.0)), step=50.0, help="Leave at 0 for automatic calculation")
+            manual_pv = st.number_input("Manual PV (Optional)", min_value=0.0, value=float(project_data.get("Manual_PV") or 0.0), step=50.0, help="Leave at 0 for automatic calculation")
         with col8:
-            manual_ev = st.number_input("Manual EV (Optional)", min_value=0.0, value=float(project_data.get("Manual_EV", 0.0)), step=50.0, help="Leave at 0 for automatic calculation")
+            manual_ev = st.number_input("Manual EV (Optional)", min_value=0.0, value=float(project_data.get("Manual_EV") or 0.0), step=50.0, help="Leave at 0 for automatic calculation")
 
         # Row 6: Schedule Header
         st.subheader("Schedule")
@@ -450,14 +452,261 @@ def main():
         # Load and display dataframe with selection
         current_df = load_table(DEFAULT_DATASET_TABLE)
         if not current_df.empty:
+            # Try to get SPI and CPI from batch results first
+            current_df = current_df.copy()
+
+            # Check if batch results are available with EVM calculations
+            if hasattr(st.session_state, 'batch_results') and st.session_state.batch_results is not None:
+                batch_df = st.session_state.batch_results.copy()
+
+                # Merge EVM metrics from batch results
+                # The batch results use 'project_id' (lowercase) as the column name
+                project_id_col = None
+                if 'project_id' in batch_df.columns:
+                    project_id_col = 'project_id'
+                elif 'Project ID' in batch_df.columns:
+                    project_id_col = 'Project ID'
+
+                if project_id_col:
+                    # Select relevant EVM columns from batch results
+                    evm_columns = [project_id_col]
+
+                    # Rename batch results columns to match our display names
+                    column_renames = {}
+                    if 'schedule_performance_index' in batch_df.columns:
+                        evm_columns.append('schedule_performance_index')
+                        column_renames['schedule_performance_index'] = 'SPI'
+                    if 'cost_performance_index' in batch_df.columns:
+                        evm_columns.append('cost_performance_index')
+                        column_renames['cost_performance_index'] = 'CPI'
+                    if 'earned_value' in batch_df.columns:
+                        evm_columns.append('earned_value')
+                        column_renames['earned_value'] = 'EV'
+                    if 'planned_value' in batch_df.columns:
+                        evm_columns.append('planned_value')
+                        column_renames['planned_value'] = 'PV'
+
+                    if len(evm_columns) > 1:  # More than just project ID
+                        # Select only the columns we need
+                        batch_evm_df = batch_df[evm_columns].copy()
+
+                        # Rename columns
+                        if column_renames:
+                            batch_evm_df = batch_evm_df.rename(columns=column_renames)
+
+                        # Rename project_id column to match current_df
+                        if project_id_col == 'project_id':
+                            batch_evm_df = batch_evm_df.rename(columns={'project_id': 'Project ID'})
+
+                        # Ensure both Project ID columns are strings to avoid merge type errors
+                        current_df['Project ID'] = current_df['Project ID'].astype(str)
+                        batch_evm_df['Project ID'] = batch_evm_df['Project ID'].astype(str)
+
+                        # Merge the EVM data
+                        current_df = current_df.merge(
+                            batch_evm_df,
+                            on='Project ID',
+                            how='left'
+                        )
+                        st.info("📊 Using EVM calculations from Portfolio Analysis batch results")
+                    else:
+                        st.warning("⚠️ No EVM metrics found in batch results. Please run 'Batch EVM Calculation' in Portfolio Analysis first.")
+                        # Add empty columns for consistency
+                        current_df['SPI'] = 0.0
+                        current_df['CPI'] = 0.0
+                else:
+                    st.warning("⚠️ Batch results don't contain project identifier column. Please run 'Batch EVM Calculation' in Portfolio Analysis first.")
+                    # Add empty columns for consistency
+                    current_df['SPI'] = 0.0
+                    current_df['CPI'] = 0.0
+            else:
+                st.warning("⚠️ No batch results found. Please run 'Batch EVM Calculation' in Portfolio Analysis to get SPI and CPI values.")
+                # Add empty columns for consistency
+                current_df['SPI'] = 0.0
+                current_df['CPI'] = 0.0
+
+            # Add comprehensive filters
+            filter_header_col1, filter_header_col2 = st.columns([3, 1])
+            with filter_header_col1:
+                st.subheader("🔧 Filters")
+            with filter_header_col2:
+                if st.button("🔄 Clear All Filters", key="clear_filters"):
+                    st.rerun()
+
+            filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+
+            with filter_col1:
+                # Project ID search filter
+                search_project_id = st.text_input("🔍 Project ID", placeholder="Search by Project ID...")
+
+            with filter_col2:
+                # Organization filter
+                org_options = ["All"] + sorted(current_df["Organization"].dropna().unique().tolist())
+                selected_org = st.selectbox("🏢 Organization", options=org_options)
+
+            with filter_col3:
+                # Plan Start date range filter
+                if 'Plan Start' in current_df.columns:
+                    try:
+                        # Convert Plan Start to datetime if it's not already
+                        if current_df['Plan Start'].dtype == 'object':
+                            current_df['Plan Start'] = pd.to_datetime(current_df['Plan Start'], format='%d/%m/%Y', errors='coerce')
+
+                        # Get min and max dates, ignoring NaT values
+                        valid_dates = current_df['Plan Start'].dropna()
+                        if len(valid_dates) > 0:
+                            min_date = valid_dates.min()
+                            max_date = valid_dates.max()
+
+                            # Ensure we have valid datetime objects
+                            if pd.notna(min_date) and pd.notna(max_date) and hasattr(min_date, 'date'):
+                                date_range = st.date_input(
+                                    "📅 Plan Start Range",
+                                    value=(min_date.date(), max_date.date()),
+                                    min_value=min_date.date(),
+                                    max_value=max_date.date()
+                                )
+                            else:
+                                st.text("📅 Plan Start Range")
+                                st.caption("No valid dates found")
+                                date_range = None
+                        else:
+                            st.text("📅 Plan Start Range")
+                            st.caption("No valid dates found")
+                            date_range = None
+                    except Exception as e:
+                        st.text("📅 Plan Start Range")
+                        st.caption(f"Date parsing error: {str(e)}")
+                        date_range = None
+                else:
+                    date_range = None
+
+            with filter_col4:
+                # SPI/CPI range filters
+                if 'SPI' in current_df.columns and 'CPI' in current_df.columns:
+                    metric_filter = st.selectbox("📊 Performance Filter",
+                        options=["All", "SPI < 1.0 (Behind Schedule)", "SPI >= 1.0 (On/Ahead Schedule)",
+                                "CPI < 1.0 (Over Budget)", "CPI >= 1.0 (On/Under Budget)",
+                                "SPI < 1.0 AND CPI < 1.0 (Critical)", "SPI >= 1.0 AND CPI >= 1.0 (Healthy)"])
+                else:
+                    metric_filter = "All"
+
+            # Store original dataframe and indices for mapping
+            original_df = current_df.copy()
+
+            # Apply filters
+            filtered_df = current_df.copy()
+
+            # Project ID filter
+            if search_project_id:
+                filtered_df = filtered_df[filtered_df["Project ID"].astype(str).str.contains(search_project_id, case=False, na=False)]
+
+            # Organization filter
+            if selected_org != "All":
+                filtered_df = filtered_df[filtered_df["Organization"] == selected_org]
+
+            # Date range filter
+            if date_range and len(date_range) == 2:
+                try:
+                    start_date, end_date = date_range
+                    # Ensure Plan Start is datetime before filtering
+                    if 'Plan Start' in filtered_df.columns:
+                        if filtered_df['Plan Start'].dtype == 'object':
+                            filtered_df['Plan Start'] = pd.to_datetime(filtered_df['Plan Start'], format='%d/%m/%Y', errors='coerce')
+
+                        # Filter only rows with valid dates
+                        valid_date_mask = filtered_df['Plan Start'].notna()
+                        if valid_date_mask.any():
+                            filtered_df = filtered_df[
+                                valid_date_mask &
+                                (filtered_df['Plan Start'].dt.date >= start_date) &
+                                (filtered_df['Plan Start'].dt.date <= end_date)
+                            ]
+                except Exception as e:
+                    st.error(f"Error filtering by date range: {str(e)}")
+
+            # Performance metric filter
+            if metric_filter != "All" and 'SPI' in filtered_df.columns and 'CPI' in filtered_df.columns:
+                if metric_filter == "SPI < 1.0 (Behind Schedule)":
+                    filtered_df = filtered_df[filtered_df['SPI'] < 1.0]
+                elif metric_filter == "SPI >= 1.0 (On/Ahead Schedule)":
+                    filtered_df = filtered_df[filtered_df['SPI'] >= 1.0]
+                elif metric_filter == "CPI < 1.0 (Over Budget)":
+                    filtered_df = filtered_df[filtered_df['CPI'] < 1.0]
+                elif metric_filter == "CPI >= 1.0 (On/Under Budget)":
+                    filtered_df = filtered_df[filtered_df['CPI'] >= 1.0]
+                elif metric_filter == "SPI < 1.0 AND CPI < 1.0 (Critical)":
+                    filtered_df = filtered_df[(filtered_df['SPI'] < 1.0) & (filtered_df['CPI'] < 1.0)]
+                elif metric_filter == "SPI >= 1.0 AND CPI >= 1.0 (Healthy)":
+                    filtered_df = filtered_df[(filtered_df['SPI'] >= 1.0) & (filtered_df['CPI'] >= 1.0)]
+
+            # Update current_df to filtered results
+            current_df = filtered_df
+
+            # Show filter results
+            if len(current_df) != len(original_df):
+                st.info(f"📊 Showing {len(current_df)} of {len(original_df)} projects after filtering")
+
+            if current_df.empty:
+                st.warning("No projects match the selected filters. Please adjust your filter criteria.")
+                return
+
             # Create a display version with formatted numbers
             display_df = current_df.copy()
+
+            # Format currency columns
             display_df["BAC"] = display_df["BAC"].apply(format_currency)
             display_df["AC"] = display_df["AC"].apply(format_currency)
             if "Manual_PV" in display_df.columns:
                 display_df["Manual_PV"] = display_df["Manual_PV"].apply(format_currency)
             if "Manual_EV" in display_df.columns:
                 display_df["Manual_EV"] = display_df["Manual_EV"].apply(format_currency)
+            if "PV" in display_df.columns:
+                display_df["PV"] = display_df["PV"].apply(format_currency)
+            if "EV" in display_df.columns:
+                display_df["EV"] = display_df["EV"].apply(format_currency)
+
+            # Format SPI and CPI as ratios with 3 decimal places
+            if "SPI" in display_df.columns:
+                display_df["SPI"] = display_df["SPI"].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
+            if "CPI" in display_df.columns:
+                display_df["CPI"] = display_df["CPI"].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
+
+            # Format dates back to string for display
+            if 'Plan Start' in display_df.columns:
+                try:
+                    # Only use dt accessor if column is actually datetime
+                    if pd.api.types.is_datetime64_any_dtype(display_df['Plan Start']):
+                        display_df['Plan Start'] = display_df['Plan Start'].dt.strftime('%d/%m/%Y')
+                    else:
+                        # If it's already string or other type, keep as is
+                        display_df['Plan Start'] = display_df['Plan Start'].astype(str)
+                except:
+                    # Fallback to string conversion
+                    display_df['Plan Start'] = display_df['Plan Start'].astype(str)
+
+            if 'Plan Finish' in display_df.columns:
+                try:
+                    # Only use dt accessor if column is actually datetime
+                    if pd.api.types.is_datetime64_any_dtype(display_df['Plan Finish']):
+                        display_df['Plan Finish'] = display_df['Plan Finish'].dt.strftime('%d/%m/%Y')
+                    else:
+                        # If it's already string or other type, keep as is
+                        display_df['Plan Finish'] = display_df['Plan Finish'].astype(str)
+                except:
+                    # Fallback to string conversion
+                    display_df['Plan Finish'] = display_df['Plan Finish'].astype(str)
+
+            # Select key columns for display (avoid showing too many columns)
+            display_columns = ['Project ID', 'Project', 'Organization', 'BAC', 'AC', 'Plan Start', 'Plan Finish']
+            if 'SPI' in display_df.columns:
+                display_columns.append('SPI')
+            if 'CPI' in display_df.columns:
+                display_columns.append('CPI')
+
+            # Only show columns that exist in the dataframe
+            display_columns = [col for col in display_columns if col in display_df.columns]
+            display_df = display_df[display_columns]
 
             # Display table
             event = st.dataframe(
@@ -469,8 +718,10 @@ def main():
 
             # Handle row selection
             if event.selection.rows:
-                selected_idx = event.selection.rows[0]
-                st.session_state.selected_row_index = selected_idx
+                selected_display_idx = event.selection.rows[0]
+                # Map the display index back to the original dataframe index
+                actual_idx = current_df.index[selected_display_idx]
+                st.session_state.selected_row_index = actual_idx
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -480,7 +731,7 @@ def main():
 
                 with col2:
                     if st.button("🗑️ Delete Selected Project", type="secondary"):
-                        if delete_project(selected_idx):
+                        if delete_project(actual_idx):
                             st.session_state.selected_row_index = None
                             st.rerun()
 
@@ -489,11 +740,11 @@ def main():
                     st.divider()
                     st.subheader("Edit Project")
 
-                    current_data = current_df.iloc[selected_idx].to_dict()
+                    current_data = original_df.iloc[st.session_state.selected_row_index].to_dict()
                     updated_data = render_project_form(current_data, "edit_form")
 
                     if updated_data:
-                        if update_project(selected_idx, updated_data):
+                        if update_project(st.session_state.selected_row_index, updated_data):
                             st.session_state.edit_mode = False
                             st.session_state.selected_row_index = None
                             st.rerun()

@@ -364,7 +364,8 @@ def calculate_portfolio_metrics(df):
     metrics['total_etc'] = df['ETC'].sum()
     metrics['total_eac'] = df['EAC'].sum()
     
-    # Portfolio performance indices
+    # Portfolio performance indices - use portfolio-level sums to avoid unrealistic individual values
+    # CPI = SUM(EV)/SUM(AC), SPI = SUM(EV)/SUM(PV)
     metrics['portfolio_cpi'] = metrics['total_earned_value'] / metrics['total_actual_cost'] if metrics['total_actual_cost'] > 0 else 0
     metrics['portfolio_spi'] = metrics['total_earned_value'] / metrics['total_planned_value'] if metrics['total_planned_value'] > 0 else 0
     

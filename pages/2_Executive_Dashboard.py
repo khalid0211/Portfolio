@@ -446,7 +446,8 @@ def calculate_portfolio_metrics(df):
     metrics['total_etc'] = df.get('ETC', pd.Series([0])).sum()
     metrics['total_eac'] = df.get('EAC', pd.Series([0])).sum()
     
-    # Portfolio performance indices
+    # Portfolio performance indices - use portfolio-level sums to avoid unrealistic individual values
+    # CPI = SUM(EV)/SUM(AC), SPI = SUM(EV)/SUM(PV)
     metrics['portfolio_cpi'] = metrics['total_earned_value'] / metrics['total_actual_cost'] if metrics['total_actual_cost'] > 0 else 0
     metrics['portfolio_spi'] = metrics['total_earned_value'] / metrics['total_planned_value'] if metrics['total_planned_value'] > 0 else 0
     
@@ -543,24 +544,25 @@ def main():
     df = map_columns_to_standard(df)
     metrics = calculate_portfolio_metrics(df)
     
+    # Use portfolio-level calculations for CPI/SPI, keep weighted average for SPIe
+    portfolio_cpi_weighted = metrics['portfolio_cpi']  # Already calculated as SUM(EV)/SUM(AC)
+    portfolio_spi_weighted = metrics['portfolio_spi']  # Already calculated as SUM(EV)/SUM(PV)
+    portfolio_spie_weighted = (df['SPIe'] * df['Budget']).sum() / df['Budget'].sum() if df['Budget'].sum() > 0 else 0  # Keep weighted for SPIe
+
     # Critical Alert Banner
-    if metrics['portfolio_cpi'] < 0.85 or metrics['portfolio_spi'] < 0.85:
+    if portfolio_cpi_weighted < 0.85 or portfolio_spi_weighted < 0.85:
         st.markdown(f"""
         <div class="alert-banner">
-            🚨 CRITICAL PORTFOLIO ALERT: Immediate intervention required • 
-            Portfolio CPI: {metrics['portfolio_cpi']:.2f} • 
-            Portfolio SPI: {metrics['portfolio_spi']:.2f}
+            🚨 CRITICAL PORTFOLIO ALERT: Immediate intervention required •
+            Portfolio CPI: {portfolio_cpi_weighted:.2f} •
+            Portfolio SPI: {portfolio_spi_weighted:.2f}
         </div>
         """, unsafe_allow_html=True)
-    
+
     # Key Performance Indicators
     st.markdown('<div class="section-header">📈 Executive Portfolio Overview</div>', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
-
-    # Calculate weighted Portfolio SPI and SPIe
-    portfolio_spi_weighted = (df['SPI'] * df['Budget']).sum() / df['Budget'].sum() if df['Budget'].sum() > 0 else 0
-    portfolio_spie_weighted = (df['SPIe'] * df['Budget']).sum() / df['Budget'].sum() if df['Budget'].sum() > 0 else 0
 
     with col1:
         st.metric(
@@ -572,9 +574,9 @@ def main():
     with col2:
         st.metric(
             label="Portfolio CPI",
-            value=f"{metrics['portfolio_cpi']:.3f}",
-            delta=f"{(metrics['portfolio_cpi'] - 1) * 100:.1f}%",
-            delta_color="inverse" if metrics['portfolio_cpi'] < 1 else "normal"
+            value=f"{portfolio_cpi_weighted:.3f}",
+            delta=f"{(portfolio_cpi_weighted - 1) * 100:.1f}%",
+            delta_color="inverse" if portfolio_cpi_weighted < 1 else "normal"
         )
 
     with col3:
@@ -602,7 +604,7 @@ def main():
         # CPI Gauge - Dial with Needle
         fig_cpi = go.Figure(go.Indicator(
             mode = "gauge+number",
-            value = metrics['portfolio_cpi'],
+            value = portfolio_cpi_weighted,
             domain = {'x': [0, 1], 'y': [0, 1]},
             title = {'text': "Cost Performance Index (CPI)", 'font': {'size': 14}},
             number = {'font': {'size': 16}},
@@ -621,7 +623,7 @@ def main():
                 'threshold': {
                     'line': {'color': "black", 'width': 3},
                     'thickness': 0.8,
-                    'value': metrics['portfolio_cpi']
+                    'value': portfolio_cpi_weighted
                 }
             }
         ))
@@ -1979,12 +1981,13 @@ def main():
                                         with st.expander("📊 Detailed Cash Flow Data", expanded=False):
                                             if cash_flow_type == "Both":
                                                 # Show comparison table for both scenarios
-                                                display_cash_flow = period_cash_flow.copy()
-                                                display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
-                                                    lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                                )
-                                                # Pivot table to show Plan vs Predicted side by side
-                                                pivot_df = display_cash_flow.pivot_table(index='Period', columns='Scenario', values='Cash_Flow', fill_value=0)
+                                                # Create pivot table with numeric data first
+                                                pivot_df = period_cash_flow.pivot_table(index='Period', columns='Scenario', values='Cash_Flow', aggfunc='sum', fill_value=0)
+                                                # Then format the values for display
+                                                for col in pivot_df.columns:
+                                                    pivot_df[col] = pivot_df[col].apply(
+                                                        lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                                    )
                                                 st.dataframe(pivot_df, use_container_width=True)
                                             else:
                                                 # Show single scenario table
@@ -2465,59 +2468,38 @@ def main():
             st.markdown('<div class="section-header">📊 Filtered Portfolio Analytics</div>', unsafe_allow_html=True)
             col1, col2, col3 = st.columns(3)
 
-            # Calculate weighted averages
+            # Calculate portfolio-level indices for filtered data (CPI/SPI) and weighted average for SPIe
             total_budget = filtered_df['Budget'].sum()
-            weighted_cpi = (filtered_df['CPI'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
-            weighted_spi = (filtered_df['SPI'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
+            total_earned_value = filtered_df.get('Earned Value', pd.Series([0])).sum()
+            total_actual_cost = filtered_df.get('Actual Cost', pd.Series([0])).sum()
+            total_planned_value = filtered_df.get('Plan Value', pd.Series([0])).sum()
+
+            weighted_cpi = total_earned_value / total_actual_cost if total_actual_cost > 0 else 0
+            weighted_spi = total_earned_value / total_planned_value if total_planned_value > 0 else 0
             weighted_spie = (filtered_df['SPIe'] * filtered_df['Budget']).sum() / total_budget if total_budget > 0 else 0
 
             with col1:
-                st.metric("📈 Avg CPI", f"{weighted_cpi:.3f}", help="Weighted Average Cost Performance Index for filtered projects (weighted by budget)")
+                st.metric("📈 Portfolio CPI", f"{weighted_cpi:.3f}", help="Portfolio Cost Performance Index: SUM(Earned Value) / SUM(Actual Cost)")
             with col2:
-                st.metric("⏱️ Avg SPI", f"{weighted_spi:.3f}", help="Weighted Average Schedule Performance Index for filtered projects (weighted by budget)")
+                st.metric("⏱️ Portfolio SPI", f"{weighted_spi:.3f}", help="Portfolio Schedule Performance Index: SUM(Earned Value) / SUM(Plan Value)")
             with col3:
-                st.metric("📊 Avg SPIe", f"{weighted_spie:.3f}", help="Weighted Average Schedule Performance Index Estimate for filtered projects (weighted by budget)")
+                st.metric("📊 Avg SPIe", f"{weighted_spie:.3f}", help="Weighted Average Schedule Performance Index Estimate (weighted by budget)")
     
     # Sidebar with executive styling
     with st.sidebar:
         st.markdown('<div class="section-header">⚙️ Executive Controls</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="section-header">📤 Portfolio Reports</div>', unsafe_allow_html=True)
-        if st.button("📋 Export Critical Projects", key="export_critical"):
-            critical_data = df[df['Health_Category'] == 'Critical']
-            csv = critical_data.to_csv(index=False)
-            st.download_button(
-                label="⬇️ Download Critical Projects Report",
-                data=csv,
-                file_name=f"critical_projects_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        
-        if st.button("📊 Export Complete Portfolio", key="export_all"):
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="⬇️ Download Full Portfolio Report",
-                data=csv,
-                file_name=f"portfolio_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        
         st.markdown('<div class="section-header">📈 Portfolio KPIs</div>', unsafe_allow_html=True)
 
-        # Calculate weighted averages for sidebar KPIs
-        total_budget_sidebar = df['Budget'].sum()
-        weighted_cpi_sidebar = (df['CPI'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
-        weighted_spi_sidebar = (df['SPI'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
-        weighted_spie_sidebar = (df['SPIe'] * df['Budget']).sum() / total_budget_sidebar if total_budget_sidebar > 0 else 0
-
-        st.metric("⭐ Average CPI", f"{weighted_cpi_sidebar:.3f}", help="Weighted Portfolio Cost Performance Index (weighted by budget)")
-        st.metric("🎯 Average SPI", f"{weighted_spi_sidebar:.3f}", help="Weighted Portfolio Schedule Performance Index (weighted by budget)")
-        st.metric("📊 Average SPIe", f"{weighted_spie_sidebar:.3f}", help="Weighted Schedule Performance Index Estimate (weighted by budget)")
+        # Use the same weighted calculations as the main dashboard for consistency
+        st.metric("⭐ Portfolio CPI", f"{portfolio_cpi_weighted:.3f}", help="Weighted Portfolio Cost Performance Index (weighted by budget)")
+        st.metric("🎯 Portfolio SPI", f"{portfolio_spi_weighted:.3f}", help="Weighted Portfolio Schedule Performance Index (weighted by budget)")
+        st.metric("📊 Portfolio SPIe", f"{portfolio_spie_weighted:.3f}", help="Weighted Schedule Performance Index Estimate (weighted by budget)")
         st.metric("🏢 Total Projects", len(df), help="Active projects in portfolio")
         
         # Add executive summary
         st.markdown('<div class="section-header">📋 Executive Summary</div>', unsafe_allow_html=True)
-        portfolio_health = "Critical" if metrics['portfolio_cpi'] < 0.8 else "At Risk" if metrics['portfolio_cpi'] < 0.95 else "Healthy"
+        portfolio_health = "Critical" if portfolio_cpi_weighted < 0.8 else "At Risk" if portfolio_cpi_weighted < 0.95 else "Healthy"
         health_color = "🔴" if portfolio_health == "Critical" else "🟡" if portfolio_health == "At Risk" else "🟢"
         
         st.markdown(f"""

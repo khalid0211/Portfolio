@@ -414,7 +414,6 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
         total_ev = valid_results['earned_value'].sum() if 'earned_value' in valid_results else 0
 
         # Present value calculations - sum the new financial metrics directly
-        total_present_value_progress = valid_results['present_value_progress'].sum() if 'present_value_progress' in valid_results else 0
         total_planned_value_project = valid_results['planned_value_project'].sum() if 'planned_value_project' in valid_results else 0
         total_likely_value_project = valid_results['likely_value_project'].sum() if 'likely_value_project' in valid_results else 0
 
@@ -551,7 +550,6 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
             'total_ac': total_ac,
             'total_pv': total_pv,
             'total_ev': total_ev,
-            'total_present_value_progress': total_present_value_progress,
             'total_planned_value_project': total_planned_value_project,
             'total_likely_value_project': total_likely_value_project,
             'total_percent_present_value_project': total_percent_present_value_project,
@@ -1061,31 +1059,6 @@ def calculate_present_value(ac, duration_months, annual_inflation_rate) -> float
         logger.error(f"Present value calculation failed: {e}")
         return 0.0
 
-def calculate_present_value_of_progress(ac, ad, annual_inflation_rate) -> float:
-    """Calculate Present Value of Progress: (AC / AD) * (1-(1+r)^(-AD))/r where r = (1+inflation_rate)^(1/12)"""
-    try:
-        ac = validate_numeric_input(ac, "AC", min_val=0.0)
-        ad = validate_numeric_input(ad, "AD", min_val=0.0)
-        annual_inflation_rate = validate_numeric_input(annual_inflation_rate, "Inflation Rate", min_val=0.0, max_val=1.0)
-
-        if ad == 0:
-            return 0.0
-        if annual_inflation_rate == 0:
-            return round(ac, 2)
-
-        r = (1 + annual_inflation_rate) ** (1/12) - 1  # Monthly rate
-        pmt = ac / ad
-
-        try:
-            factor = (1 - (1 + r) ** (-ad)) / r
-            return round(max(pmt * factor, 0.0), 2)
-        except (OverflowError, ValueError):
-            logger.warning("Present Value of Progress calculation overflow, returning AC")
-            return round(ac, 2)
-
-    except ValueError as e:
-        logger.error(f"Present Value of Progress calculation failed: {e}")
-        return 0.0
 
 def calculate_planned_value_of_project(bac, od, annual_inflation_rate) -> float:
     """Calculate Planned Value of Project: (BAC/OD) * (1-(1+r)^(-OD))/r where r = (1+inflation_rate)^(1/12)"""
@@ -1362,7 +1335,6 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         percent_time_used = safe_divide(actual_duration, original_duration) * 100 if original_duration > 0 else 0.0
 
         # Calculate new financial metrics
-        present_value_progress = calculate_present_value_of_progress(ac, actual_duration, annual_inflation_rate)
         planned_value_project = calculate_planned_value_of_project(bac, original_duration, annual_inflation_rate)
 
         # Get likely duration from es_metrics for likely value calculation
@@ -1395,7 +1367,6 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
             'manual_pv': manual_pv if use_manual_pv else None,
             'use_manual_ev': use_manual_ev,
             'manual_ev': manual_ev if use_manual_ev else None,
-            'present_value_progress': present_value_progress,
             'planned_value_project': planned_value_project,
             'likely_value_project': likely_value_project,
             'percent_present_value_project': percent_present_value_project,
@@ -1462,7 +1433,6 @@ def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
         'Present Value': 'present_value',
         'Plan Value': 'planned_value',
         'Earned Value': 'earned_value',
-        'Present Value Progress': 'present_value_progress',
         'Planned Value Project': 'planned_value_project',
         'Likely Value Project': 'likely_value_project',
         '% Present Value Project': 'percent_present_value_project',
@@ -1487,7 +1457,7 @@ def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
             # Handle missing columns with appropriate defaults
             if display_name in ['Project ID', 'Project Name']:
                 formatted_df[display_name] = 'N/A'
-            elif display_name in ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'ETC', 'EAC', 'Present Value', 'Present Value Progress', 'Planned Value Project', 'Likely Value Project']:
+            elif display_name in ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'ETC', 'EAC', 'Present Value', 'Planned Value Project', 'Likely Value Project']:
                 formatted_df[display_name] = 0.0
             elif display_name in ['CPI', 'SPI', 'SPIe']:
                 formatted_df[display_name] = 1.0
@@ -1511,7 +1481,7 @@ def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: st
     # Apply formatting to specific columns (moved to percentage_cols section below)
 
     # Format currency columns including new financial analysis fields
-    currency_cols = ['bac', 'ac', 'planned_value', 'earned_value', 'present_value', 'present_value_progress',
+    currency_cols = ['bac', 'ac', 'planned_value', 'earned_value', 'present_value',
                      'planned_value_project', 'likely_value_project', 'estimate_to_complete', 'estimate_at_completion']
     for col in currency_cols:
         if col in display_df.columns:
@@ -1521,7 +1491,6 @@ def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: st
                 'planned_value': 'Plan Value',
                 'earned_value': 'Earned Value',
                 'present_value': 'Present Value',
-                'present_value_progress': 'Present Value Progress',
                 'planned_value_project': 'Planned Value Project',
                 'likely_value_project': 'Likely Value Project',
                 'estimate_to_complete': 'ETC',
@@ -1577,7 +1546,7 @@ def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: st
         'Project ID', 'Project Name', 'Budget', 'Plan Start', 'Plan Finish', 'Likely Finish',
         '% Budget Used', '% Time Used', 'Original Dur', 'Actual Dur', 'Likely Dur',
         'Actual Cost', 'Present Value', 'Plan Value', 'Earned Value',
-        'Present Value Progress', 'Planned Value Project', 'Likely Value Project',
+        'Planned Value Project', 'Likely Value Project',
         '% Present Value Project', '% Likely Value Project',
         'CPI', 'SPI', 'SPIe', 'ETC', 'EAC'
     ]
@@ -3280,7 +3249,6 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
 
         # Advanced Financial Analysis
         ("🏗️ ADVANCED FINANCIAL ANALYSIS", "", "", ""),
-        ("Present Value of Progress", "(AC/AD) × PV Factor", fmt_curr(results.get('present_value_progress', 0)), "Discounted value of work progress"),
         ("Planned Value of Project", "(BAC/OD) × PV Factor", fmt_curr(results.get('planned_value_project', 0)), "Total project value at planned pace"),
         ("Likely Value of Project", "(BAC/LD) × PV Factor", fmt_curr(results.get('likely_value_project', 0)), "Total project value at forecast pace"),
         ("% Present Value of Project", "PrV ÷ BAC × 100", f"{results.get('percent_present_value_project', 0):.2f}%", "Planned value efficiency"),
@@ -3490,10 +3458,10 @@ def main():
                 
                 portfolio_summary = calculate_portfolio_summary(batch_df)
                 if "error" not in portfolio_summary:
-                    avg_cpi = portfolio_summary.get('weighted_avg_cpi', 0)
-                    avg_spi = portfolio_summary.get('weighted_avg_spi', 0)
+                    portfolio_cpi = portfolio_summary.get('portfolio_cpi', 0)
+                    portfolio_spi = portfolio_summary.get('portfolio_spi', 0)
                 else:
-                    avg_cpi, avg_spi = 0, 0
+                    portfolio_cpi, portfolio_spi = 0, 0
                 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -3501,13 +3469,13 @@ def main():
                 with col2:
                     st.metric("Valid Results", valid_count)
                 with col3:
-                    cpi_status = "🟢" if avg_cpi >= 1.0 else "🟡" if avg_cpi >= 0.9 else "🔴"
-                    st.metric("Avg CPI", f"{cpi_status} {format_performance_index(avg_cpi)}" if avg_cpi else "N/A", 
-                             f"{avg_cpi - 1:.2f}" if avg_cpi else None)
+                    cpi_status = "🟢" if portfolio_cpi >= 1.0 else "🟡" if portfolio_cpi >= 0.9 else "🔴"
+                    st.metric("Portfolio CPI", f"{cpi_status} {format_performance_index(portfolio_cpi)}" if portfolio_cpi else "N/A",
+                             f"{portfolio_cpi - 1:.2f}" if portfolio_cpi else None)
                 with col4:
-                    spi_status = "🟢" if avg_spi >= 1.0 else "🟡" if avg_spi >= 0.9 else "🔴"
-                    st.metric("Avg SPI", f"{spi_status} {format_performance_index(avg_spi)}" if avg_spi else "N/A",
-                             f"{avg_spi - 1:.2f}" if avg_spi else None)
+                    spi_status = "🟢" if portfolio_spi >= 1.0 else "🟡" if portfolio_spi >= 0.9 else "🔴"
+                    st.metric("Portfolio SPI", f"{spi_status} {format_performance_index(portfolio_spi)}" if portfolio_spi else "N/A",
+                             f"{portfolio_spi - 1:.2f}" if portfolio_spi else None)
                 
                 if valid_count > 0 and "error" not in portfolio_summary:
                     st.markdown("### 📊 Portfolio Performance Analysis")
