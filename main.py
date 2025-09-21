@@ -51,6 +51,10 @@ st.markdown("""
 <div class="main-header">
     <h1>📊 Portfolio Management Suite</h1>
     <h3>Project Portfolio Analysis & Executive Dashboard System</h3>
+    <p style="margin-top: 1rem; font-size: 1.1em; color: #666; font-style: italic;">
+        Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting<br>
+        Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
+    </p>
 </div>
 """, unsafe_allow_html=True)
 

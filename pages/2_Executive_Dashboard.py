@@ -33,12 +33,12 @@ st.markdown("""
         background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 100%);
         backdrop-filter: blur(20px);
         border: 1px solid rgba(255,255,255,0.3);
-        padding: 3rem 2rem;
-        border-radius: 20px;
+        padding: 1.5rem 2rem;
+        border-radius: 15px;
         color: #1a1a1a;
         text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        margin-bottom: 1.5rem;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
         position: relative;
         overflow: hidden;
     }
@@ -63,22 +63,23 @@ st.markdown("""
     }
     
     .main-header h1 {
-        font-size: 3rem;
+        font-size: 2.5rem;
         font-weight: 700;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.3rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         position: relative;
         z-index: 2;
     }
-    
+
     .main-header h3 {
-        font-size: 1.3rem;
+        font-size: 1.2rem;
         font-weight: 400;
         color: #4a5568;
         position: relative;
         z-index: 2;
+        margin-bottom: 0.3rem;
     }
     
     /* Executive metric cards */
@@ -470,9 +471,12 @@ def main():
     <div class="main-header">
         <h1>📊 Portfolio Executive Command Center</h1>
         <h3>Chief Projects Officer • Strategic Portfolio Intelligence</h3>
-        <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9;">
-            Real-time Portfolio Health Monitoring & Executive Decision Support
+        <div style="margin-top: 0.8rem; font-size: 1rem; opacity: 0.9; margin-bottom: 0.5rem;">
+            Portfolio Health Monitoring & Executive Decision Support
         </div>
+        <p style="margin-top: 0.8rem; font-size: 0.9em; color: #666; font-style: italic; margin-bottom: 0;">
+            Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
+        </p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -787,7 +791,127 @@ def main():
             st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix, thousands=False)} over budget)")
         else:
             st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
-    
+
+    # Portfolio Time/Budget Performance Curve
+    st.markdown('<div class="section-header">📈 Portfolio Time/Budget Performance Curve</div>', unsafe_allow_html=True)
+
+    if len(df) > 0 and 'CPI' in df.columns and 'SPI' in df.columns and 'Budget' in df.columns:
+        # Create fixed BAC-based tier ranges
+        budget_values = df['Budget'].dropna()
+        if len(budget_values) > 0:
+            def get_budget_category(budget):
+                if pd.isna(budget):
+                    return "Unknown"
+                elif budget >= 15000:
+                    return f"Tier 5: Strategic (≥ {currency_symbol}15,000)"
+                elif budget >= 8500:
+                    return f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)"
+                elif budget >= 6000:
+                    return f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)"
+                elif budget >= 4000:
+                    return f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)"
+                else:
+                    return f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+
+            # Add budget category to dataframe
+            df_scatter = df.copy()
+            df_scatter['Budget_Range'] = df_scatter['Budget'].apply(get_budget_category)
+
+            # Define the desired order for the legend (Tier 5 to Tier 1)
+            tier_order = [
+                f"Tier 5: Strategic (≥ {currency_symbol}15,000)",
+                f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)",
+                f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)",
+                f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)",
+                f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+            ]
+
+            # Convert Budget_Range to categorical with specific order
+            df_scatter['Budget_Range'] = pd.Categorical(df_scatter['Budget_Range'], categories=tier_order, ordered=True)
+
+            # Create scatter plot with consistent dot sizes and explicit ordering
+            fig_performance = px.scatter(
+                df_scatter,
+                x='SPI',
+                y='CPI',
+                color='Budget_Range',
+                hover_data=['Project Name', 'Budget'],
+                title="Portfolio Performance Matrix: Time vs Budget Performance by Project Size",
+                labels={
+                    'SPI': 'Schedule Performance Index (SPI)',
+                    'CPI': 'Cost Performance Index (CPI)',
+                    'Budget_Range': 'Budget Range'
+                },
+                color_discrete_sequence=['#e74c3c', '#f39c12', '#f1c40f', '#27ae60', '#3498db'],
+                category_orders={'Budget_Range': tier_order}
+            )
+
+            # Add quadrant lines at 1.0 for both axes
+            fig_performance.add_hline(y=1.0, line_dash="dash", line_color="gray", opacity=0.7)
+            fig_performance.add_vline(x=1.0, line_dash="dash", line_color="gray", opacity=0.7)
+
+            # Add quadrant labels
+            fig_performance.add_annotation(
+                x=1.3, y=1.3, text="✅ On Time<br>Under Budget",
+                showarrow=False, font=dict(size=12, color="green"), bgcolor="rgba(255,255,255,0.8)"
+            )
+            fig_performance.add_annotation(
+                x=0.7, y=1.3, text="⚠️ Behind Schedule<br>Under Budget",
+                showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
+            )
+            fig_performance.add_annotation(
+                x=1.3, y=0.7, text="⚠️ On Time<br>Over Budget",
+                showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
+            )
+            fig_performance.add_annotation(
+                x=0.7, y=0.7, text="🚨 Behind Schedule<br>Over Budget",
+                showarrow=False, font=dict(size=12, color="red"), bgcolor="rgba(255,255,255,0.8)"
+            )
+
+            # Update layout
+            fig_performance.update_layout(
+                height=500,
+                showlegend=True,
+                legend=dict(
+                    orientation="v",
+                    yanchor="top",
+                    y=1,
+                    xanchor="left",
+                    x=1.02
+                ),
+                xaxis=dict(title='Schedule Performance Index (SPI)<br>← Behind Schedule | Ahead of Schedule →'),
+                yaxis=dict(title='Cost Performance Index (CPI)<br>← Over Budget | Under Budget →')
+            )
+
+            # Update traces for consistent dot appearance
+            fig_performance.update_traces(
+                marker=dict(
+                    size=10,  # Consistent size for all dots
+                    line=dict(width=1, color='rgba(0,0,0,0.3)')
+                )
+            )
+
+            st.plotly_chart(fig_performance, use_container_width=True)
+
+            # Add interpretation guide
+            st.markdown(f"""
+            **📊 How to Read This Chart:**
+            - **X-axis (SPI):** Schedule Performance - Right is better (ahead of schedule)
+            - **Y-axis (CPI):** Cost Performance - Up is better (under budget)
+            - **Dot Colors:** Project tiers by budget:
+              - 🔴 **Tier 5:** Strategic (≥ {currency_symbol}15K{currency_postfix})
+              - 🟠 **Tier 4:** Major ({currency_symbol}8.5K{currency_postfix} - {currency_symbol}15K{currency_postfix})
+              - 🟡 **Tier 3:** Large-Scale ({currency_symbol}6K{currency_postfix} - {currency_symbol}8.5K{currency_postfix})
+              - 🟢 **Tier 2:** Mid-Range ({currency_symbol}4K{currency_postfix} - {currency_symbol}6K{currency_postfix})
+              - 🔵 **Tier 1:** Small-Scale (< {currency_symbol}4K{currency_postfix})
+            - **Target Zone:** Upper right quadrant (SPI > 1.0, CPI > 1.0)
+            - **Hover:** Click any dot to see project name and budget details
+            """)
+        else:
+            st.info("No budget data available for performance curve.")
+    else:
+        st.info("Performance curve requires CPI, SPI, and Budget data.")
+
     # Project Spotlight Section
     with st.expander("🎯 Project Spotlight", expanded=False):
         # Dropdown for view selection
@@ -1095,16 +1219,68 @@ def main():
             if available_columns:
                 spotlight_table = spotlight_projects[available_columns].copy()
 
-                # Format the data for display - handle all possible currency column names
-                currency_columns = ['Budget', 'BAC', 'bac', 'Actual Cost', 'AC', 'ac', 'Earned Value', 'EV', 'ev', 'EAC', 'ETC']
+                # Update column headers to include currency information instead of formatting values
+                currency_columns = ['Budget', 'BAC', 'bac', 'Actual Cost', 'AC', 'ac', 'Earned Value', 'EV', 'ev', 'Planned Value', 'PV', 'pv', 'EAC', 'ETC']
+                spotlight_column_renames = {}
                 for col in currency_columns:
                     if col in spotlight_table.columns:
-                        spotlight_table[col] = spotlight_table[col].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False) if pd.notna(x) else "N/A")
+                        if col in ['Budget', 'BAC', 'bac']:
+                            spotlight_column_renames[col] = f'BAC ({currency_symbol}{currency_postfix})' if currency_postfix else f'BAC ({currency_symbol})'
+                        elif col in ['Actual Cost', 'AC', 'ac']:
+                            spotlight_column_renames[col] = f'AC ({currency_symbol}{currency_postfix})' if currency_postfix else f'AC ({currency_symbol})'
+                        elif col in ['Earned Value', 'EV', 'ev']:
+                            spotlight_column_renames[col] = f'EV ({currency_symbol}{currency_postfix})' if currency_postfix else f'EV ({currency_symbol})'
+                        elif col in ['Planned Value', 'PV', 'pv']:
+                            spotlight_column_renames[col] = f'PV ({currency_symbol}{currency_postfix})' if currency_postfix else f'PV ({currency_symbol})'
+                        elif col == 'EAC':
+                            spotlight_column_renames[col] = f'EAC ({currency_symbol}{currency_postfix})' if currency_postfix else f'EAC ({currency_symbol})'
+                        elif col == 'ETC':
+                            spotlight_column_renames[col] = f'ETC ({currency_symbol}{currency_postfix})' if currency_postfix else f'ETC ({currency_symbol})'
 
-                # Format performance indices
+                # Apply column renames for spotlight table
+                spotlight_table = spotlight_table.rename(columns=spotlight_column_renames)
+
+                # Create column configuration for spotlight table
+                spotlight_column_config = {}
+
+                # Configure currency columns for spotlight table
+                spotlight_currency_original_columns = ['Budget', 'BAC', 'bac', 'Actual Cost', 'AC', 'ac', 'Earned Value', 'EV', 'ev', 'Planned Value', 'PV', 'pv', 'EAC', 'ETC']
+                for col in spotlight_currency_original_columns:
+                    if col in spotlight_projects.columns:  # Check original column names before renaming
+                        renamed_col = spotlight_column_renames.get(col, col)  # Get the renamed column name
+                        if renamed_col in spotlight_table.columns:
+                            spotlight_column_config[renamed_col] = st.column_config.NumberColumn(
+                                renamed_col,
+                                format="%.2f",
+                                help=f"Values in {currency_symbol}{currency_postfix}" if currency_postfix else f"Values in {currency_symbol}"
+                            )
+
+                # Configure performance indices columns for spotlight table
                 for col in ['CPI', 'SPI', 'SPIe']:
                     if col in spotlight_table.columns:
-                        spotlight_table[col] = spotlight_table[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else "N/A")
+                        spotlight_column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            format="%.3f",
+                            help=f"{col} performance index"
+                        )
+
+                # Configure duration columns
+                duration_format_cols = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
+                for col in duration_format_cols:
+                    if col in spotlight_table.columns:
+                        spotlight_column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            format="%.1f",
+                            help="Duration in months"
+                        )
+
+                # Configure Delay column
+                if 'Delay' in spotlight_table.columns:
+                    spotlight_column_config['Delay'] = st.column_config.NumberColumn(
+                        'Delay',
+                        format="%.1f",
+                        help="Schedule delay in months"
+                    )
 
                 # Format dates if present - handle multiple possible date column names
                 date_columns = ['Plan Start', 'plan_start', 'Start Date', 'start_date']
@@ -1112,15 +1288,8 @@ def main():
                     if col in spotlight_table.columns:
                         spotlight_table[col] = pd.to_datetime(spotlight_table[col], errors='coerce').dt.strftime('%Y-%m-%d')
 
-                # Format duration columns if present
-                duration_format_cols = ['Original Dur', 'original_duration_months', 'OD', 'Actual Dur', 'actual_duration_months', 'AD', 'Likely Dur', 'forecast_duration', 'LD']
-                for col in duration_format_cols:
-                    if col in spotlight_table.columns:
-                        spotlight_table[col] = spotlight_table[col].apply(lambda x: f"{x:.1f} months" if pd.notna(x) else "N/A")
-
-                # Format Delay column if present
-                if 'Delay' in spotlight_table.columns:
-                    spotlight_table['Delay'] = spotlight_table['Delay'].apply(lambda x: f"{x:.1f} months" if pd.notna(x) else "N/A")
+                # Duration and delay columns are now handled by column configuration
+                # (Remove string formatting to preserve numeric sorting)
 
                 # Apply conditional styling based on view type
                 if selected_view == "1. Critical Projects":
@@ -1129,12 +1298,12 @@ def main():
                         return 'background-color: #ffebee; color: #d32f2f; font-weight: bold;'
                     try:
                         styled_table = spotlight_table.style.applymap(highlight_critical_projects)
-                        st.dataframe(styled_table, use_container_width=True, height=300)
+                        st.dataframe(styled_table, use_container_width=True, height=300, column_config=spotlight_column_config)
                     except:
-                        st.dataframe(spotlight_table, use_container_width=True, height=300)
+                        st.dataframe(spotlight_table, use_container_width=True, height=300, column_config=spotlight_column_config)
                 else:
                     # Standard display for other views
-                    st.dataframe(spotlight_table, use_container_width=True, height=300)
+                    st.dataframe(spotlight_table, use_container_width=True, height=300, column_config=spotlight_column_config)
 
                 st.markdown(f"**{view_description}**")
             else:
@@ -1408,9 +1577,9 @@ def main():
         with st.expander("📋 Projects", expanded=False):
             # Display filtered data with enhanced columns
             if org_columns:
-                display_columns = ['Project Name', org_columns[0], 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
+                display_columns = ['Project Name', org_columns[0], 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'Plan Value', 'Earned Value', 'EAC']
             else:
-                display_columns = ['Project Name', 'Organization', 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
+                display_columns = ['Project Name', 'Organization', 'Budget_Category', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'Plan Value', 'Earned Value', 'EAC']
 
             available_columns = [col for col in display_columns if col in filtered_df.columns]
 
@@ -1418,18 +1587,52 @@ def main():
                 # Format the dataframe for better display
                 display_df = filtered_df[available_columns].copy()
 
-                # Format budget columns
+                # Update column names to include currency information
+                column_renames = {}
                 if 'Budget' in display_df.columns:
-                    display_df['Budget'] = display_df['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                    column_renames['Budget'] = f'Budget ({currency_symbol}{currency_postfix})' if currency_postfix else f'Budget ({currency_symbol})'
                 if 'Actual Cost' in display_df.columns:
-                    display_df['Actual Cost'] = display_df['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                    column_renames['Actual Cost'] = f'AC ({currency_symbol}{currency_postfix})' if currency_postfix else f'AC ({currency_symbol})'
+                if 'Plan Value' in display_df.columns:
+                    column_renames['Plan Value'] = f'PV ({currency_symbol}{currency_postfix})' if currency_postfix else f'PV ({currency_symbol})'
+                if 'Earned Value' in display_df.columns:
+                    column_renames['Earned Value'] = f'EV ({currency_symbol}{currency_postfix})' if currency_postfix else f'EV ({currency_symbol})'
                 if 'EAC' in display_df.columns:
-                    display_df['EAC'] = display_df['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                    column_renames['EAC'] = f'EAC ({currency_symbol}{currency_postfix})' if currency_postfix else f'EAC ({currency_symbol})'
 
-                # Format performance indices
+                # Apply column renames
+                display_df = display_df.rename(columns=column_renames)
+
+                # Create column configuration for proper numeric formatting and alignment
+                column_config = {}
+
+                # Configure currency columns
+                currency_value_columns = ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'EAC']
+                for col in currency_value_columns:
+                    if col in filtered_df.columns:  # Check original column names
+                        renamed_col = column_renames.get(col, col)  # Get the renamed column name
+                        if renamed_col in display_df.columns:
+                            column_config[renamed_col] = st.column_config.NumberColumn(
+                                renamed_col,
+                                format="%.2f",
+                                help=f"Values in {currency_symbol}{currency_postfix}" if currency_postfix else f"Values in {currency_symbol}"
+                            )
+
+                # Configure performance indices columns
                 for col in ['CPI', 'SPI', 'SPIe']:
                     if col in display_df.columns:
-                        display_df[col] = display_df[col].apply(lambda x: f"{x:.3f}")
+                        column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            format="%.3f",
+                            help=f"{col} performance index"
+                        )
+
+                # Configure other numeric columns
+                if 'Project Count' in display_df.columns:
+                    column_config['Project Count'] = st.column_config.NumberColumn(
+                        'Project Count',
+                        format="%d"
+                    )
 
                 # Color-code the health status
                 def highlight_health(val):
@@ -1443,9 +1646,9 @@ def main():
 
                 if 'Health_Category' in display_df.columns:
                     styled_df = display_df.style.applymap(highlight_health, subset=['Health_Category'])
-                    st.dataframe(styled_df, use_container_width=True, height=400)
+                    st.dataframe(styled_df, use_container_width=True, height=400, column_config=column_config)
                 else:
-                    st.dataframe(display_df, use_container_width=True, height=400)
+                    st.dataframe(display_df, use_container_width=True, height=400, column_config=column_config)
 
         # Organizations Expander
         with st.expander("🏢 Organizations", expanded=False):
@@ -1455,13 +1658,22 @@ def main():
             if org_col in filtered_df.columns and len(filtered_df) > 0:
                 # Group by organization and calculate consolidated metrics
                 try:
-                    org_summary = filtered_df.groupby(org_col).agg({
+                    # Define aggregation columns dynamically
+                    agg_dict = {
                         'Project Name': 'count',  # Project count
                         'Budget': 'sum',          # Total budget
                         'Actual Cost': 'sum',     # Total actual cost
                         'EAC': 'sum',            # Total EAC
                         'Health_Category': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'Unknown'  # Most common health status
-                    }).rename(columns={'Project Name': 'Project Count'})
+                    }
+
+                    # Add Plan Value and Earned Value if they exist
+                    if 'Plan Value' in filtered_df.columns:
+                        agg_dict['Plan Value'] = 'sum'
+                    if 'Earned Value' in filtered_df.columns:
+                        agg_dict['Earned Value'] = 'sum'
+
+                    org_summary = filtered_df.groupby(org_col).agg(agg_dict).rename(columns={'Project Name': 'Project Count'})
 
                     # Calculate weighted averages for CPI, SPI, SPIe
                     org_weighted_metrics = filtered_df.groupby(org_col).apply(
@@ -1478,8 +1690,18 @@ def main():
                     # Check if we have valid data
                     if len(org_display) > 0:
                         # Reorder columns to match project view (without Budget_Category)
-                        org_display_columns = ['Project Count', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost', 'EAC']
-                        org_display = org_display[org_display_columns]
+                        base_org_columns = ['Project Count', 'Budget', 'CPI', 'SPI', 'SPIe', 'Health_Category', 'Actual Cost']
+                        optional_columns = []
+                        if 'Plan Value' in org_display.columns:
+                            optional_columns.append('Plan Value')
+                        if 'Earned Value' in org_display.columns:
+                            optional_columns.append('Earned Value')
+                        if 'EAC' in org_display.columns:
+                            optional_columns.append('EAC')
+
+                        org_display_columns = base_org_columns + optional_columns
+                        available_org_columns = [col for col in org_display_columns if col in org_display.columns]
+                        org_display = org_display[available_org_columns]
 
                         # Reset index to ensure unique indices for styling
                         org_display = org_display.reset_index()
@@ -1487,26 +1709,60 @@ def main():
                         # Format the organizational data for display
                         org_display_formatted = org_display.copy()
 
-                        # Format budget columns
+                        # Update column names to include currency information for organizations
+                        org_column_renames = {}
                         if 'Budget' in org_display_formatted.columns:
-                            org_display_formatted['Budget'] = org_display_formatted['Budget'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                            org_column_renames['Budget'] = f'Budget ({currency_symbol}{currency_postfix})' if currency_postfix else f'Budget ({currency_symbol})'
                         if 'Actual Cost' in org_display_formatted.columns:
-                            org_display_formatted['Actual Cost'] = org_display_formatted['Actual Cost'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                            org_column_renames['Actual Cost'] = f'AC ({currency_symbol}{currency_postfix})' if currency_postfix else f'AC ({currency_symbol})'
+                        if 'Plan Value' in org_display_formatted.columns:
+                            org_column_renames['Plan Value'] = f'PV ({currency_symbol}{currency_postfix})' if currency_postfix else f'PV ({currency_symbol})'
+                        if 'Earned Value' in org_display_formatted.columns:
+                            org_column_renames['Earned Value'] = f'EV ({currency_symbol}{currency_postfix})' if currency_postfix else f'EV ({currency_symbol})'
                         if 'EAC' in org_display_formatted.columns:
-                            org_display_formatted['EAC'] = org_display_formatted['EAC'].apply(lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False))
+                            org_column_renames['EAC'] = f'EAC ({currency_symbol}{currency_postfix})' if currency_postfix else f'EAC ({currency_symbol})'
 
-                        # Format performance indices
+                        # Apply column renames for organizations
+                        org_display_formatted = org_display_formatted.rename(columns=org_column_renames)
+
+                        # Create column configuration for organizations table
+                        org_column_config = {}
+
+                        # Configure currency columns for organizations
+                        org_currency_value_columns = ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'EAC']
+                        for col in org_currency_value_columns:
+                            if col in org_display.columns:  # Check original column names before renaming
+                                renamed_col = org_column_renames.get(col, col)  # Get the renamed column name
+                                if renamed_col in org_display_formatted.columns:
+                                    org_column_config[renamed_col] = st.column_config.NumberColumn(
+                                        renamed_col,
+                                        format="%.2f",
+                                        help=f"Values in {currency_symbol}{currency_postfix}" if currency_postfix else f"Values in {currency_symbol}"
+                                    )
+
+                        # Configure performance indices columns for organizations
                         for col in ['CPI', 'SPI', 'SPIe']:
                             if col in org_display_formatted.columns:
-                                org_display_formatted[col] = org_display_formatted[col].apply(lambda x: f"{x:.3f}")
+                                org_column_config[col] = st.column_config.NumberColumn(
+                                    col,
+                                    format="%.3f",
+                                    help=f"{col} performance index"
+                                )
+
+                        # Configure Project Count column
+                        if 'Project Count' in org_display_formatted.columns:
+                            org_column_config['Project Count'] = st.column_config.NumberColumn(
+                                'Project Count',
+                                format="%d"
+                            )
 
                         # Apply health status styling with error handling
                         try:
                             if 'Health_Category' in org_display_formatted.columns and len(org_display_formatted) > 0:
                                 styled_org_df = org_display_formatted.style.applymap(highlight_health, subset=['Health_Category'])
-                                st.dataframe(styled_org_df, use_container_width=True, height=300)
+                                st.dataframe(styled_org_df, use_container_width=True, height=300, column_config=org_column_config)
                             else:
-                                st.dataframe(org_display_formatted, use_container_width=True, height=300)
+                                st.dataframe(org_display_formatted, use_container_width=True, height=300, column_config=org_column_config)
                         except (KeyError, ValueError) as e:
                             # Fallback to unstyled dataframe if styling fails
                             st.dataframe(org_display_formatted, use_container_width=True, height=300)
@@ -1936,20 +2192,8 @@ def main():
                                         st.plotly_chart(fig_cash_flow, use_container_width=True)
 
                                         # Display summary metrics
-                                        col1, col2, col3 = st.columns(3)
+                                        col1, col2 = st.columns(2)
                                         with col1:
-                                            if cash_flow_type == "Both":
-                                                # Show totals for both scenarios
-                                                plan_total = period_cash_flow[period_cash_flow['Scenario'] == 'Plan']['Cash_Flow'].sum()
-                                                predicted_total = period_cash_flow[period_cash_flow['Scenario'] == 'Predicted']['Cash_Flow'].sum()
-                                                st.metric("Plan Total (BAC/OD)", format_currency(plan_total, currency_symbol, currency_postfix, thousands=False))
-                                                st.metric("Predicted Total (BAC/LD)", format_currency(predicted_total, currency_symbol, currency_postfix, thousands=False))
-                                            else:
-                                                total_cash_flow = period_cash_flow['Cash_Flow'].sum()
-                                                scenario_name = "Plan (BAC/OD)" if cash_flow_type == "Plan" else "Predicted (BAC/LD)"
-                                                st.metric(f"Total Cash Flow - {scenario_name}", format_currency(total_cash_flow, currency_symbol, currency_postfix, thousands=False))
-
-                                        with col2:
                                             if cash_flow_type != "Both":
                                                 try:
                                                     avg_monthly = period_cash_flow['Cash_Flow'].mean()
@@ -1961,7 +2205,7 @@ def main():
                                                     st.metric("Average per Period", "Error")
                                                     st.error(f"Error calculating average: {str(e)}")
 
-                                        with col3:
+                                        with col2:
                                             if cash_flow_type != "Both":
                                                 try:
                                                     if len(period_cash_flow) > 0 and not period_cash_flow['Cash_Flow'].empty:

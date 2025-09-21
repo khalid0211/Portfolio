@@ -377,6 +377,10 @@ def main():
     # Header
     st.title("📝 Manual Data Entry")
     st.markdown("Professional interface for managing your project portfolio data")
+    st.markdown("""
+    **Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting**
+    Developed by Dr. Khalid Ahmad Khan – [LinkedIn](https://www.linkedin.com/in/khalidahmadkhan/)
+    """, unsafe_allow_html=True)
 
     # Check if data exists
     current_df = load_table(DEFAULT_DATASET_TABLE)

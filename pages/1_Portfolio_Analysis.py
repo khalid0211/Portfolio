@@ -1453,6 +1453,8 @@ def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
     column_mapping = {
         'Project ID': 'project_id',
         'Project Name': 'project_name',
+        'Organization': 'organization',
+        'Project Manager': 'project_manager',
         'Budget': 'bac',
         'Plan Start': 'plan_start',
         'Plan Finish': 'plan_finish',
@@ -1489,7 +1491,7 @@ def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
                 formatted_df[display_name] = batch_df[source_col]
         else:
             # Handle missing columns with appropriate defaults
-            if display_name in ['Project ID', 'Project Name']:
+            if display_name in ['Project ID', 'Project Name', 'Organization', 'Project Manager']:
                 formatted_df[display_name] = 'N/A'
             elif display_name in ['Budget', 'Actual Cost', 'Plan Value', 'Earned Value', 'ETC', 'EAC', 'Present Value', 'Planned Value Project', 'Likely Value Project']:
                 formatted_df[display_name] = 0.0
