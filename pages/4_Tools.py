@@ -82,21 +82,7 @@ with col1:
     """, unsafe_allow_html=True)
 
     if st.button("🚀 Launch Cash Flow Simulator", key="cashflow_btn", use_container_width=True):
-        try:
-            # Get the current working directory
-            current_dir = os.getcwd()
-            cashflow_path = os.path.join(current_dir, "pages", "tools", "cashflowsim.py")
-
-            if os.path.exists(cashflow_path):
-                # Launch the cashflow simulator in a new streamlit instance
-                subprocess.Popen([sys.executable, "-m", "streamlit", "run", cashflow_path],
-                               cwd=current_dir)
-                st.success("✅ Cash Flow Simulator launched in a new window!")
-                st.info("🔍 Check your browser for the new Streamlit tab/window")
-            else:
-                st.error("❌ Cash Flow Simulator not found. Please check the file location.")
-        except Exception as e:
-            st.error(f"❌ Error launching Cash Flow Simulator: {str(e)}")
+        st.switch_page("pages/5_Cash_Flow_Simulator.py")
 
 with col2:
     st.markdown("""
@@ -115,21 +101,7 @@ with col2:
     """, unsafe_allow_html=True)
 
     if st.button("🚀 Launch EVM Simulator", key="evm_btn", use_container_width=True):
-        try:
-            # Get the current working directory
-            current_dir = os.getcwd()
-            evm_path = os.path.join(current_dir, "pages", "tools", "evmsim.py")
-
-            if os.path.exists(evm_path):
-                # Launch the EVM simulator in a new streamlit instance
-                subprocess.Popen([sys.executable, "-m", "streamlit", "run", evm_path],
-                               cwd=current_dir)
-                st.success("✅ EVM Simulator launched in a new window!")
-                st.info("🔍 Check your browser for the new Streamlit tab/window")
-            else:
-                st.error("❌ EVM Simulator not found. Please check the file location.")
-        except Exception as e:
-            st.error(f"❌ Error launching EVM Simulator: {str(e)}")
+        st.switch_page("pages/6_EVM_Simulator.py")
 
 # Information section
 st.markdown("---")
@@ -139,14 +111,14 @@ with st.expander("ℹ️ How to Use These Tools"):
     st.markdown("""
     **Getting Started:**
     1. **Click the launch button** for the tool you want to use
-    2. **A new browser window/tab** will open with the tool
+    2. **The tool will open in the same app** (use sidebar to navigate back)
     3. **Each tool runs independently** - no data sharing with main application
-    4. **Close the tool** by closing its browser tab when finished
+    4. **Use the sidebar** to navigate between tools and main app
 
     **Important Notes:**
-    - These tools are **standalone applications**
+    - These tools are **integrated pages** in the same app
     - They do **not share data** with the main Portfolio Management Suite
-    - Each tool opens in a **separate Streamlit instance**
+    - Use the **sidebar navigation** to switch between tools
     - You can run **multiple tools simultaneously**
     - Tools will run on **different ports** automatically
 
