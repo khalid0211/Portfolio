@@ -97,7 +97,7 @@ with col3:
     """)
 
     if st.button("🔧 Open Tools", key="tools_btn", use_container_width=True):
-        st.switch_page("pages/3_Tools.py")
+        st.switch_page("pages/4_Tools.py")
 
 # Quick stats if data exists
 if hasattr(st.session_state, 'batch_results') and st.session_state.batch_results is not None:
