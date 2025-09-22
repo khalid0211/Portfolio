@@ -61,7 +61,7 @@ st.markdown("""
 # Navigation
 st.markdown("## Choose Your Application")
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("""
@@ -86,6 +86,18 @@ with col2:
 
     if st.button("📊 Open Executive Dashboard", key="dashboard_btn", use_container_width=True):
         st.switch_page("pages/2_Executive_Dashboard.py")
+
+with col3:
+    st.markdown("""
+    ### 🛠️ Tools
+    - Standalone simulation tools
+    - Cash Flow Simulator
+    - EVM Simulator
+    - Independent analysis utilities
+    """)
+
+    if st.button("🔧 Open Tools", key="tools_btn", use_container_width=True):
+        st.switch_page("pages/3_Tools.py")
 
 # Quick stats if data exists
 if hasattr(st.session_state, 'batch_results') and st.session_state.batch_results is not None:

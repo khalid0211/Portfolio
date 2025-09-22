@@ -5,7 +5,9 @@
       "Bash(python:*)",
       "Bash(streamlit run:*)",
       "Bash(copy Portfolio_cloud.py pages1_Portfolio_Analysis.py)",
-      "Bash(copy cpo_dashboard.py pages2_Executive_Dashboard.py)"
+      "Bash(copy cpo_dashboard.py pages2_Executive_Dashboard.py)",
+      "Bash(mv:*)",
+      "Bash(dir)"
     ],
     "deny": [],
     "ask": []
