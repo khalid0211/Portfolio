@@ -64,6 +64,12 @@ def calculate_scurve_cashflow(budget, duration, alpha=2, beta=2):
 
 st.set_page_config(layout="wide", page_title="Project Delay Financial Impact Simulator")
 
+# Initialize session state for baseline functionality
+if 'baseline_data' not in st.session_state:
+    st.session_state.baseline_data = None
+if 'comparison_records' not in st.session_state:
+    st.session_state.comparison_records = []
+
 # Custom CSS for professional appearance and compact layout
 st.markdown("""
 <style>
@@ -510,6 +516,99 @@ baseline_budget = sum(baseline_monthly_cashflows)
 simulated_budget = sum(simulated_monthly_cashflows)
 budget_variance = ((simulated_budget / baseline_budget) - 1) * 100 if baseline_budget != 0 else 0
 
+# Baseline and Export Controls
+col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+
+with col1:
+    if st.button("📊 Set Baseline", help="Capture current scenario as baseline for comparison"):
+        current_record = {
+            'timestamp': pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'duration': duration,
+            'pattern': cashflow_type,
+            'start_delay': start_delay,
+            'project_delay': project_delay,
+            'inflation': inflation,
+            'simulated_budget': simulated_budget,
+            'budget_variance': budget_variance
+        }
+        st.session_state.baseline_data = current_record
+        st.session_state.comparison_records = []  # Clear existing comparisons
+        st.success("✓ Baseline set successfully!")
+
+with col2:
+    if st.button("⚖️ Compare to Baseline", help="Add current scenario to comparison table"):
+        if st.session_state.baseline_data is not None:
+            current_record = {
+                'timestamp': pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'duration': duration,
+                'pattern': cashflow_type,
+                'start_delay': start_delay,
+                'project_delay': project_delay,
+                'inflation': inflation,
+                'simulated_budget': simulated_budget,
+                'budget_variance': budget_variance,
+                'delta_from_baseline': simulated_budget - st.session_state.baseline_data['simulated_budget']
+            }
+            st.session_state.comparison_records.append(current_record)
+            st.success("✓ Comparison added!")
+        else:
+            st.warning("⚠️ Please set a baseline first")
+
+with col3:
+    if st.button("💾 Export Comparisons", help="Download comparison table as CSV"):
+        if st.session_state.baseline_data is not None and st.session_state.comparison_records:
+            # Prepare comparison data for export
+            export_data = []
+
+            # Add baseline row
+            baseline_row = st.session_state.baseline_data.copy()
+            baseline_row['scenario_type'] = 'Baseline'
+            baseline_row['delta_from_baseline'] = 0.0
+            export_data.append(baseline_row)
+
+            # Add comparison rows
+            for record in st.session_state.comparison_records:
+                record['scenario_type'] = 'Comparison'
+                export_data.append(record)
+
+            df = pd.DataFrame(export_data)
+            csv = df.to_csv(index=False)
+
+            st.download_button(
+                label="📁 Download Comparison CSV",
+                data=csv,
+                file_name=f"baseline_comparison_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning("⚠️ No comparison data available")
+
+with col4:
+    if st.button("💰 Export Current Cashflow", help="Download current scenario cashflow as CSV"):
+        # Prepare current cashflow data for export
+        cashflow_data = []
+
+        for i, (baseline_cf, simulated_cf) in enumerate(zip(baseline_data, simulated_data)):
+            cashflow_data.append({
+                'period': labels[i],
+                'period_number': i + 1,
+                'baseline_cashflow': baseline_cf,
+                'simulated_cashflow': simulated_cf,
+                'variance': simulated_cf - baseline_cf,
+                'baseline_cumulative': baseline_accumulated[i],
+                'simulated_cumulative': simulated_accumulated[i]
+            })
+
+        df = pd.DataFrame(cashflow_data)
+        csv = df.to_csv(index=False)
+
+        st.download_button(
+            label="📈 Download Cashflow CSV",
+            data=csv,
+            file_name=f"project_cashflow_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+
 st.markdown("**Financial Impact Analysis**")
 st.markdown(f"""
 <div style="background: #f8f9fa; padding: 0.8rem; border-radius: 6px; border: 1px solid #dee2e6; margin: 0.5rem 0;">
@@ -520,6 +619,102 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Display comparison table if baseline exists and comparisons have been made
+if st.session_state.baseline_data is not None:
+    st.markdown("**📊 Baseline & Comparison Analysis**")
+
+    # Prepare display data
+    display_data = []
+
+    # Add baseline row
+    baseline_display = {
+        'Scenario': '🔵 Baseline',
+        'Timestamp': st.session_state.baseline_data['timestamp'],
+        'Duration': f"{st.session_state.baseline_data['duration']} mo",
+        'Pattern': st.session_state.baseline_data['pattern'],
+        'Start Delay': f"{st.session_state.baseline_data['start_delay']} mo",
+        'Project Delay': f"{st.session_state.baseline_data['project_delay']} mo",
+        'Inflation': f"{st.session_state.baseline_data['inflation']}%",
+        'Simulated Budget': f"{st.session_state.baseline_data['simulated_budget']:,.1f}M",
+        'Budget Variance': f"{st.session_state.baseline_data['budget_variance']:+.1f}%",
+        'Delta from Baseline': "0.0M"
+    }
+    display_data.append(baseline_display)
+
+    # Add comparison rows
+    for i, record in enumerate(st.session_state.comparison_records):
+        comparison_display = {
+            'Scenario': f'⚖️ Comparison {i+1}',
+            'Timestamp': record['timestamp'],
+            'Duration': f"{record['duration']} mo",
+            'Pattern': record['pattern'],
+            'Start Delay': f"{record['start_delay']} mo",
+            'Project Delay': f"{record['project_delay']} mo",
+            'Inflation': f"{record['inflation']}%",
+            'Simulated Budget': f"{record['simulated_budget']:,.1f}M",
+            'Budget Variance': f"{record['budget_variance']:+.1f}%",
+            'Delta from Baseline': f"{record['delta_from_baseline']:+.1f}M"
+        }
+        display_data.append(comparison_display)
+
+    if display_data:
+        df_display = pd.DataFrame(display_data)
+
+        # Custom CSS for the comparison table
+        st.markdown("""
+        <style>
+        .comparison-table {
+            font-size: 0.85rem;
+        }
+        .comparison-table th {
+            background-color: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+            text-align: center;
+            padding: 0.5rem 0.3rem;
+            border: 1px solid #dee2e6;
+        }
+        .comparison-table td {
+            text-align: center;
+            padding: 0.4rem 0.3rem;
+            border: 1px solid #dee2e6;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Scenario": st.column_config.TextColumn("Scenario", width="small"),
+                "Timestamp": st.column_config.TextColumn("Time", width="medium"),
+                "Duration": st.column_config.TextColumn("Duration", width="small"),
+                "Pattern": st.column_config.TextColumn("Pattern", width="small"),
+                "Start Delay": st.column_config.TextColumn("Start Delay", width="small"),
+                "Project Delay": st.column_config.TextColumn("Proj. Delay", width="small"),
+                "Inflation": st.column_config.TextColumn("Inflation", width="small"),
+                "Simulated Budget": st.column_config.TextColumn("Sim. Budget", width="medium"),
+                "Budget Variance": st.column_config.TextColumn("Budget Var.", width="small"),
+                "Delta from Baseline": st.column_config.TextColumn("Δ from Baseline", width="medium")
+            }
+        )
+
+        # Summary statistics if there are comparisons
+        if st.session_state.comparison_records:
+            st.markdown("**📈 Impact Summary**")
+
+            max_delta = max([abs(r['delta_from_baseline']) for r in st.session_state.comparison_records])
+            avg_delta = sum([r['delta_from_baseline'] for r in st.session_state.comparison_records]) / len(st.session_state.comparison_records)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Max Budget Impact", f"{max_delta:,.1f}M")
+            with col2:
+                st.metric("Avg Budget Impact", f"{avg_delta:+.1f}M")
+            with col3:
+                st.metric("Total Comparisons", len(st.session_state.comparison_records))
 
 st.markdown("""
 <div style="text-align: center; margin-top: 1rem; padding: 0.6rem; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-top: 2px solid #6c757d;">
