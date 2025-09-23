@@ -24,7 +24,7 @@ st.markdown("""
     
     /* Global styling */
     .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background: #ffffff;
         font-family: 'Inter', sans-serif;
     }
     
@@ -467,18 +467,16 @@ def calculate_portfolio_metrics(df):
 
 def main():
     # Executive Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>📊 Portfolio Executive Command Center</h1>
-        <h3>Chief Projects Officer • Strategic Portfolio Intelligence</h3>
-        <div style="margin-top: 0.8rem; font-size: 1rem; opacity: 0.9; margin-bottom: 0.5rem;">
-            Portfolio Health Monitoring & Executive Decision Support
-        </div>
-        <p style="margin-top: 0.8rem; font-size: 0.9em; color: #666; font-style: italic; margin-bottom: 0;">
+    st.title("📊 Portfolio Executive Dashboard")
+    st.markdown(
+        """
+        <div style='color:#003366; font-size:16px; line-height:1.4;'>
+            Strategic Portfolio Intelligence & Executive Decision Support<br>
             Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
     # Get currency settings from Portfolio Analysis if available
     # Try multiple sources in order of preference:

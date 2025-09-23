@@ -8,7 +8,8 @@
       "Bash(copy cpo_dashboard.py pages2_Executive_Dashboard.py)",
       "Bash(mv:*)",
       "Bash(dir)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []

@@ -14,16 +14,12 @@ st.markdown("""
 <style>
     .main-header {
         text-align: center;
-        color: #1a202c;
-        font-size: 2.25rem;
-        font-weight: 700;
-        margin-bottom: 1.5rem;
-        border-bottom: 4px solid #667eea;
-        padding-bottom: 0.75rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
     }
 
     .parameters-container {
@@ -589,22 +585,13 @@ if pv >= 0 and ev >= 0 and ac >= 0 and bac > 0:
 else:
     st.warning("Please ensure all input values are valid and Budget at Completion is greater than zero.")
 
-# Footer
 st.markdown("""
-<div style="text-align: center; margin-top: 2rem; padding: 1.25rem;
-     background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-     border-radius: 12px;
-     box-shadow: 0 8px 32px rgba(102, 126, 234, 0.2), 0 4px 16px rgba(0,0,0,0.1);
-     border: 1px solid rgba(255, 255, 255, 0.18);
-     backdrop-filter: blur(10px);">
-    <div style="color: white; font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-        EVM Performance Analyzer v1.0
+<div style="text-align: center; margin-top: 1rem; padding: 0.6rem; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-top: 2px solid #6c757d;">
+    <div style="color: #495057; font-size: 0.85rem; margin-bottom: 0.2rem;">
+        <strong>EVM Performance Analyzer v1.0</strong>
     </div>
-    <div style="color: rgba(255, 255, 255, 0.95); font-size: 0.85rem; margin-bottom: 0.3rem; font-weight: 600;">
-        Developed by <strong>Dr. Khalid Ahmad Khan</strong>
-    </div>
-    <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.5px;">
-        Professional Earned Value Management Analysis • September 2025
+    <div style="color: #6c757d; font-size: 0.75rem;">
+        Developed by <strong>Dr. Khalid Ahmad Khan</strong> • Engineering Management Solutions • September 2025
     </div>
 </div>
 """, unsafe_allow_html=True)
