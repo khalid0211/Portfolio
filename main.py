@@ -53,39 +53,102 @@ st.markdown("""
     <h3>Project Portfolio Analysis & Executive Dashboard System</h3>
     <p style="margin-top: 1rem; font-size: 1.1em; color: #666; font-style: italic;">
         Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting<br>
+        <strong>Version 1.0 • Released September 23, 2025</strong><br>
         Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
     </p>
 </div>
 """, unsafe_allow_html=True)
 
 # Navigation
-st.markdown("## Choose Your Application")
+st.markdown("## Choose Your Tool")
 
+# ═══════════════════════════════════════════════════════════════════
+# 📊 PORTFOLIO MANAGEMENT SUITE
+# ═══════════════════════════════════════════════════════════════════
+st.markdown("### 📊 Portfolio Management")
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
-    ### 🔍 Portfolio Analysis
+    #### 🔍 Portfolio Analysis
     - Upload project data (CSV/JSON)
     - Perform EVM calculations
     - Batch processing for multiple projects
     - Download detailed results
     """)
-
     if st.button("🚀 Open Portfolio Analysis", key="portfolio_btn", use_container_width=True):
         st.switch_page("pages/1_Portfolio_Analysis.py")
 
 with col2:
     st.markdown("""
-    ### 📈 Executive Dashboard
+    #### 📈 Executive Dashboard
     - View portfolio health metrics
     - Critical project alerts
     - Strategic performance indicators
-    - Executive summary reports
+    - Executive summary reports with filtering
     """)
-
     if st.button("📊 Open Executive Dashboard", key="dashboard_btn", use_container_width=True):
         st.switch_page("pages/2_Executive_Dashboard.py")
+
+st.markdown("---")
+
+# ═══════════════════════════════════════════════════════════════════
+# 💰 PROJECT FINANCIAL TOOLS
+# ═══════════════════════════════════════════════════════════════════
+st.markdown("### 💰 Project Financial Tools")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+    #### 📝 Manual Data Entry
+    - Quick project data input
+    - EVM calculation on-the-fly
+    - Single project analysis
+    - Instant results and visualizations
+    """)
+    if st.button("✏️ Open Manual Data Entry", key="manual_btn", use_container_width=True):
+        st.switch_page("pages/3_Manual_Data_Entry.py")
+
+with col2:
+    st.markdown("""
+    #### 💸 Cash Flow Simulator
+    - Project delay impact analysis
+    - Multiple cash flow patterns (Linear, S-Curve, Highway, Building)
+    - Inflation and delay modeling
+    - Baseline comparison & export capabilities
+    """)
+    if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", use_container_width=True):
+        st.switch_page("pages/5_Cash_Flow_Simulator.py")
+
+st.markdown("---")
+
+# ═══════════════════════════════════════════════════════════════════
+# 📈 EARNED VALUE MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════
+st.markdown("### 📈 Earned Value Management")
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown("""
+    #### 🎯 EVM Simulator
+    - Interactive EVM scenario modeling
+    - Performance index simulations
+    - Schedule and cost impact analysis
+    - Advanced forecasting tools
+    """)
+    if st.button("🎯 Open EVM Simulator", key="evm_btn", use_container_width=True):
+        st.switch_page("pages/6_EVM_Simulator.py")
+
+with col2:
+    # Placeholder for potential future tool or info
+    st.markdown("""
+    #### 🔮 Coming Soon
+    - Advanced forecasting models
+    - Risk analysis integration
+    - Portfolio optimization
+    - AI-powered insights
+    """)
+    st.info("🚧 Future enhancements planned")
 
 
 # Quick stats if data exists
@@ -106,14 +169,19 @@ if hasattr(st.session_state, 'batch_results') and st.session_state.batch_results
 # Help section
 with st.expander("ℹ️ How to Use This System"):
     st.markdown("""
-    **Typical Workflow:**
+    **Portfolio Management Workflow:**
     1. **Start with Portfolio Analysis** to upload your project data
     2. **Run batch calculations** to process all projects
-    3. **Click "Generate Executive Dashboard"** to view executive summary
+    3. **Click "Generate Executive Dashboard"** to view executive summary with filtering
     4. **Or navigate manually** using the buttons above
 
+    **Individual Project Tools:**
+    - **Manual Data Entry:** Quick single project analysis
+    - **Cash Flow Simulator:** Model project delays and financial impacts
+    - **EVM Simulator:** Advanced earned value modeling and forecasting
+
     **Data Flow:**
-    - Data processed in Portfolio Analysis is automatically available in Executive Dashboard
-    - No need to download/upload files between applications
-    - Both applications share the same session data
+    - Portfolio tools share session data automatically
+    - Individual tools work independently
+    - All tools provide export capabilities for further analysis
     """)

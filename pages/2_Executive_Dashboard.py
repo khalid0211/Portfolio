@@ -792,125 +792,6 @@ def main():
         else:
             st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
 
-    # Portfolio Time/Budget Performance Curve
-    st.markdown('<div class="section-header">📈 Portfolio Time/Budget Performance Curve</div>', unsafe_allow_html=True)
-
-    if len(df) > 0 and 'CPI' in df.columns and 'SPI' in df.columns and 'Budget' in df.columns:
-        # Create fixed BAC-based tier ranges
-        budget_values = df['Budget'].dropna()
-        if len(budget_values) > 0:
-            def get_budget_category(budget):
-                if pd.isna(budget):
-                    return "Unknown"
-                elif budget >= 15000:
-                    return f"Tier 5: Strategic (≥ {currency_symbol}15,000)"
-                elif budget >= 8500:
-                    return f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)"
-                elif budget >= 6000:
-                    return f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)"
-                elif budget >= 4000:
-                    return f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)"
-                else:
-                    return f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
-
-            # Add budget category to dataframe
-            df_scatter = df.copy()
-            df_scatter['Budget_Range'] = df_scatter['Budget'].apply(get_budget_category)
-
-            # Define the desired order for the legend (Tier 5 to Tier 1)
-            tier_order = [
-                f"Tier 5: Strategic (≥ {currency_symbol}15,000)",
-                f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)",
-                f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)",
-                f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)",
-                f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
-            ]
-
-            # Convert Budget_Range to categorical with specific order
-            df_scatter['Budget_Range'] = pd.Categorical(df_scatter['Budget_Range'], categories=tier_order, ordered=True)
-
-            # Create scatter plot with consistent dot sizes and explicit ordering
-            fig_performance = px.scatter(
-                df_scatter,
-                x='SPI',
-                y='CPI',
-                color='Budget_Range',
-                hover_data=['Project Name', 'Budget'],
-                title="Portfolio Performance Matrix: Time vs Budget Performance by Project Size",
-                labels={
-                    'SPI': 'Schedule Performance Index (SPI)',
-                    'CPI': 'Cost Performance Index (CPI)',
-                    'Budget_Range': 'Budget Range'
-                },
-                color_discrete_sequence=['#e74c3c', '#f39c12', '#f1c40f', '#27ae60', '#3498db'],
-                category_orders={'Budget_Range': tier_order}
-            )
-
-            # Add quadrant lines at 1.0 for both axes
-            fig_performance.add_hline(y=1.0, line_dash="dash", line_color="gray", opacity=0.7)
-            fig_performance.add_vline(x=1.0, line_dash="dash", line_color="gray", opacity=0.7)
-
-            # Add quadrant labels
-            fig_performance.add_annotation(
-                x=1.3, y=1.3, text="✅ On Time<br>Under Budget",
-                showarrow=False, font=dict(size=12, color="green"), bgcolor="rgba(255,255,255,0.8)"
-            )
-            fig_performance.add_annotation(
-                x=0.7, y=1.3, text="⚠️ Behind Schedule<br>Under Budget",
-                showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
-            )
-            fig_performance.add_annotation(
-                x=1.3, y=0.7, text="⚠️ On Time<br>Over Budget",
-                showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
-            )
-            fig_performance.add_annotation(
-                x=0.7, y=0.7, text="🚨 Behind Schedule<br>Over Budget",
-                showarrow=False, font=dict(size=12, color="red"), bgcolor="rgba(255,255,255,0.8)"
-            )
-
-            # Update layout
-            fig_performance.update_layout(
-                height=500,
-                showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="top",
-                    y=1,
-                    xanchor="left",
-                    x=1.02
-                ),
-                xaxis=dict(title='Schedule Performance Index (SPI)<br>← Behind Schedule | Ahead of Schedule →'),
-                yaxis=dict(title='Cost Performance Index (CPI)<br>← Over Budget | Under Budget →')
-            )
-
-            # Update traces for consistent dot appearance
-            fig_performance.update_traces(
-                marker=dict(
-                    size=10,  # Consistent size for all dots
-                    line=dict(width=1, color='rgba(0,0,0,0.3)')
-                )
-            )
-
-            st.plotly_chart(fig_performance, use_container_width=True)
-
-            # Add interpretation guide
-            st.markdown(f"""
-            **📊 How to Read This Chart:**
-            - **X-axis (SPI):** Schedule Performance - Right is better (ahead of schedule)
-            - **Y-axis (CPI):** Cost Performance - Up is better (under budget)
-            - **Dot Colors:** Project tiers by budget:
-              - 🔴 **Tier 5:** Strategic (≥ {currency_symbol}15K{currency_postfix})
-              - 🟠 **Tier 4:** Major ({currency_symbol}8.5K{currency_postfix} - {currency_symbol}15K{currency_postfix})
-              - 🟡 **Tier 3:** Large-Scale ({currency_symbol}6K{currency_postfix} - {currency_symbol}8.5K{currency_postfix})
-              - 🟢 **Tier 2:** Mid-Range ({currency_symbol}4K{currency_postfix} - {currency_symbol}6K{currency_postfix})
-              - 🔵 **Tier 1:** Small-Scale (< {currency_symbol}4K{currency_postfix})
-            - **Target Zone:** Upper right quadrant (SPI > 1.0, CPI > 1.0)
-            - **Hover:** Click any dot to see project name and budget details
-            """)
-        else:
-            st.info("No budget data available for performance curve.")
-    else:
-        st.info("Performance curve requires CPI, SPI, and Budget data.")
 
     # Project Spotlight Section
     with st.expander("🎯 Project Spotlight", expanded=False):
@@ -1572,6 +1453,142 @@ def main():
         ]
         
         st.write(f"Showing {len(filtered_df)} projects (filtered from {len(df)} total)")
+
+        # ═══════════════════════════════════════════════════════════════════
+        # FILTERED PORTFOLIO PERFORMANCE CURVE
+        # ═══════════════════════════════════════════════════════════════════
+
+        # Portfolio Time/Budget Performance Curve (Filtered)
+        with st.expander("📈 Portfolio Performance Curve (Filtered)", expanded=True):
+            if len(filtered_df) > 0 and 'CPI' in filtered_df.columns and 'SPI' in filtered_df.columns and 'Budget' in filtered_df.columns:
+                # Create fixed BAC-based tier ranges
+                budget_values = filtered_df['Budget'].dropna()
+                if len(budget_values) > 0:
+                    def get_budget_category(budget):
+                        if pd.isna(budget):
+                            return "Unknown"
+                        elif budget >= 15000:
+                            return f"Tier 5: Strategic (≥ {currency_symbol}15,000)"
+                        elif budget >= 8500:
+                            return f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)"
+                        elif budget >= 6000:
+                            return f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)"
+                        elif budget >= 4000:
+                            return f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)"
+                        else:
+                            return f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+
+                    # Add budget category to filtered dataframe
+                    df_scatter = filtered_df.copy()
+                    df_scatter['Budget_Range'] = df_scatter['Budget'].apply(get_budget_category)
+
+                    # Define the desired order for the legend (Tier 5 to Tier 1)
+                    tier_order = [
+                        f"Tier 5: Strategic (≥ {currency_symbol}15,000)",
+                        f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)",
+                        f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)",
+                        f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)",
+                        f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+                    ]
+
+                    # Convert Budget_Range to categorical with specific order
+                    df_scatter['Budget_Range'] = pd.Categorical(df_scatter['Budget_Range'], categories=tier_order, ordered=True)
+
+                    # Create scatter plot with consistent dot sizes and explicit ordering
+                    fig_performance = px.scatter(
+                        df_scatter,
+                        x='SPI',
+                        y='CPI',
+                        color='Budget_Range',
+                        hover_data=['Project Name', 'Budget'],
+                        title=f"Filtered Portfolio Performance Matrix ({len(filtered_df)} projects)",
+                        labels={
+                            'SPI': 'Schedule Performance Index (SPI)',
+                            'CPI': 'Cost Performance Index (CPI)',
+                            'Budget_Range': 'Budget Range'
+                        },
+                        color_discrete_sequence=['#e74c3c', '#f39c12', '#f1c40f', '#27ae60', '#3498db'],
+                        category_orders={'Budget_Range': tier_order}
+                    )
+
+                    # Add quadrant lines at 1.0 for both axes
+                    fig_performance.add_hline(y=1.0, line_dash="dash", line_color="gray", opacity=0.7)
+                    fig_performance.add_vline(x=1.0, line_dash="dash", line_color="gray", opacity=0.7)
+
+                    # Add quadrant labels
+                    fig_performance.add_annotation(
+                        x=1.3, y=1.3, text="✅ On Time<br>Under Budget",
+                        showarrow=False, font=dict(size=12, color="green"), bgcolor="rgba(255,255,255,0.8)"
+                    )
+                    fig_performance.add_annotation(
+                        x=0.7, y=1.3, text="⚠️ Behind Schedule<br>Under Budget",
+                        showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
+                    )
+                    fig_performance.add_annotation(
+                        x=1.3, y=0.7, text="⚠️ On Time<br>Over Budget",
+                        showarrow=False, font=dict(size=12, color="orange"), bgcolor="rgba(255,255,255,0.8)"
+                    )
+                    fig_performance.add_annotation(
+                        x=0.7, y=0.7, text="🚨 Behind Schedule<br>Over Budget",
+                        showarrow=False, font=dict(size=12, color="red"), bgcolor="rgba(255,255,255,0.8)"
+                    )
+
+                    # Update layout
+                    fig_performance.update_layout(
+                        height=500,
+                        showlegend=True,
+                        legend=dict(
+                            orientation="v",
+                            yanchor="top",
+                            y=1,
+                            xanchor="left",
+                            x=1.02
+                        ),
+                        xaxis=dict(title='Schedule Performance Index (SPI)<br>← Behind Schedule | Ahead of Schedule →'),
+                        yaxis=dict(title='Cost Performance Index (CPI)<br>← Over Budget | Under Budget →')
+                    )
+
+                    # Update traces for consistent dot appearance
+                    fig_performance.update_traces(
+                        marker=dict(
+                            size=10,  # Consistent size for all dots
+                            line=dict(width=1, color='rgba(0,0,0,0.3)')
+                        )
+                    )
+
+                    st.plotly_chart(fig_performance, use_container_width=True)
+
+                    # Filter summary for performance curve
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        healthy_count = len(df_scatter[df_scatter['Health_Category'] == 'Healthy']) if 'Health_Category' in df_scatter.columns else 0
+                        st.metric("✅ Healthy Projects", healthy_count)
+                    with col2:
+                        at_risk_count = len(df_scatter[df_scatter['Health_Category'] == 'At Risk']) if 'Health_Category' in df_scatter.columns else 0
+                        st.metric("⚠️ At Risk Projects", at_risk_count)
+                    with col3:
+                        critical_count = len(df_scatter[df_scatter['Health_Category'] == 'Critical']) if 'Health_Category' in df_scatter.columns else 0
+                        st.metric("🚨 Critical Projects", critical_count)
+
+                    # Add interpretation guide
+                    st.markdown(f"""
+                    **📊 How to Read This Chart:**
+                    - **X-axis (SPI):** Schedule Performance - Right is better (ahead of schedule)
+                    - **Y-axis (CPI):** Cost Performance - Up is better (under budget)
+                    - **Dot Colors:** Project tiers by budget:
+                      - 🔴 **Tier 5:** Strategic (≥ {currency_symbol}15K{currency_postfix})
+                      - 🟠 **Tier 4:** Major ({currency_symbol}8.5K{currency_postfix} - {currency_symbol}15K{currency_postfix})
+                      - 🟡 **Tier 3:** Large-Scale ({currency_symbol}6K{currency_postfix} - {currency_symbol}8.5K{currency_postfix})
+                      - 🟢 **Tier 2:** Mid-Range ({currency_symbol}4K{currency_postfix} - {currency_symbol}6K{currency_postfix})
+                      - 🔵 **Tier 1:** Small-Scale (< {currency_symbol}4K{currency_postfix})
+                    - **Target Zone:** Upper right quadrant (SPI > 1.0, CPI > 1.0)
+                    - **Hover:** Click any dot to see project name and budget details
+                    - **Chart updates automatically** based on your filter selections above
+                    """)
+                else:
+                    st.info("No budget data available for performance curve.")
+            else:
+                st.info("Performance curve requires CPI, SPI, and Budget data.")
 
         # Projects Expander
         with st.expander("📋 Projects", expanded=False):

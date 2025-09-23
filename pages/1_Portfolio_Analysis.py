@@ -23,7 +23,15 @@ from typing import Optional, Dict, Any, List, Union
 import pandas as pd
 import numpy as np
 import requests
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    # Create stub functions to prevent errors
+    plt = None
+    patches = None
 import streamlit as st
 from dateutil import parser as date_parser
 
@@ -320,7 +328,9 @@ def maybe(val, default="—"):
 def create_gauge_chart(value: float, title: str, min_val: float = 0.4, max_val: float = 1.1) -> None:
     """Create a simple gauge chart for performance indices with scale 0.4 to 1.1."""
     try:
-        import matplotlib.patches as patches
+        if not MATPLOTLIB_AVAILABLE:
+            st.error("📊 Charts require matplotlib. Please install: pip install matplotlib")
+            return
         
         fig, ax = plt.subplots(figsize=(4, 3))
         
@@ -3386,9 +3396,14 @@ def main():
                     
                     st.markdown("#### 📊 Portfolio Performance Charts")
                     try:
+                        if not MATPLOTLIB_AVAILABLE:
+                            st.error("📊 Charts require matplotlib. Please install: pip install matplotlib")
+                            st.info("Charts are disabled until matplotlib is installed.")
+                            return
+
                         fig = plt.figure(figsize=(20, 16))
                         plt.style.use('seaborn-v0_8-whitegrid')
-                        
+
                         # Portfolio Performance Matrix
                         ax1 = plt.subplot(2, 2, 1)
                         ax1.set_xlim(0.5, 1.5); ax1.set_ylim(0.5, 1.5)
@@ -3447,7 +3462,7 @@ def main():
                                    edgecolors='black', linewidth=2, label='Portfolio', marker='o')
                         ax3.set_xlim(0, 1); ax3.set_ylim(0, 1.2); ax3.set_xlabel('Time (Normalized)'); ax3.set_ylabel('PV (Normalized)')
                         ax3.set_title('Portfolio Time/Budget Performance Curve', fontweight='bold'); ax3.legend(loc='upper left'); ax3.grid(True, alpha=0.3)
-                        
+
                         plt.tight_layout()
                         st.pyplot(fig, width="stretch")
                     except Exception as e:
@@ -3744,9 +3759,14 @@ def main():
                 st.markdown("### 📈 Performance Visualization")
                 
                 try:
+                    if not MATPLOTLIB_AVAILABLE:
+                        st.error("📊 Charts require matplotlib. Please install: pip install matplotlib")
+                        st.info("Charts are disabled until matplotlib is installed.")
+                        return
+
                     # Create comprehensive charts
                     fig = plt.figure(figsize=(20, 16))
-                    
+
                     # Professional styling
                     plt.style.use('seaborn-v0_8' if 'seaborn-v0_8' in plt.style.available else 'default')
                     
