@@ -7,7 +7,8 @@
       "Bash(copy Portfolio_cloud.py pages1_Portfolio_Analysis.py)",
       "Bash(copy cpo_dashboard.py pages2_Executive_Dashboard.py)",
       "Bash(mv:*)",
-      "Bash(dir)"
+      "Bash(dir)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []
