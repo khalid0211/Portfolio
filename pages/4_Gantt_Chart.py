@@ -3,6 +3,7 @@ from typing import List, Dict
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import streamlit as st
 
@@ -74,6 +75,37 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
 
 
+def is_valid_finite_number(x):
+    """Check if a number is valid and finite."""
+    try:
+        return pd.notna(x) and np.isfinite(float(x)) and not pd.isna(x)
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
+def format_currency(amount: float, symbol: str, postfix: str = "", decimals: int = 2) -> str:
+    """Enhanced currency formatting with comma separators and postfix options."""
+    if not is_valid_finite_number(amount):
+        return "—"
+
+    # Format with comma separators and specified decimal places
+    formatted_amount = f"{float(amount):,.{decimals}f}"
+
+    # Map postfix to abbreviations
+    postfix_map = {
+        "Thousand": "K",
+        "Million": "M",
+        "Billion": "B"
+    }
+
+    if postfix in postfix_map:
+        return f"{symbol}{formatted_amount} {postfix_map[postfix]}"
+    elif postfix:
+        return f"{symbol}{formatted_amount} {postfix}"
+    else:
+        return f"{symbol}{formatted_amount}"
+
+
 
 def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
     """Render filter widgets and return the filtered DataFrame with control values."""
@@ -83,86 +115,183 @@ def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
     min_budget = float(numeric_bac.min()) if not numeric_bac.empty else 0.0
     max_budget = float(numeric_bac.max()) if not numeric_bac.empty else min_budget
 
+    numeric_od = df["original_duration_months"].dropna().astype(float) if "original_duration_months" in df.columns else pd.Series(dtype=float)
+    min_od = float(numeric_od.min()) if not numeric_od.empty else 0.0
+    max_od = float(numeric_od.max()) if not numeric_od.empty else min_od
+
     min_start = df["plan_start"].min() if "plan_start" in df.columns else pd.NaT
     max_start = df["plan_start"].max() if "plan_start" in df.columns else pd.NaT
+    min_finish = df["plan_finish"].min() if "plan_finish" in df.columns else pd.NaT
+    max_finish = df["plan_finish"].max() if "plan_finish" in df.columns else pd.NaT
 
-    with st.container():
-        col1, col2, col3 = st.columns([1.3, 1, 1])
-        with col1:
-            org_selection = st.multiselect(
-                "Organization",
-                options=organizations,
-                default=organizations,
-                placeholder="Select organization(s)" if organizations else "No organizations available"
-            ) if organizations else []
-        with col2:
-            min_budget_toggle = st.toggle("Set Min Budget", value=False, key="gantt_min_budget_toggle")
+    st.markdown("### 🔍 Filters")
+
+    # 1. Period and View (first row)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        period_choice = st.radio("Period", list(PERIOD_OPTIONS.keys()), index=2, horizontal=True)  # Default to Year (index 2)
+    with col2:
+        show_predicted = st.toggle("Predicted View", value=False, key="gantt_predicted_view")  # Default to Plan view
+        st.caption(f"Mode: {'Predicted' if show_predicted else 'Plan'}")
+
+    # 2. Organization (single line)
+    org_toggle = st.toggle("Filter by Organization", value=False, key="gantt_org_toggle")
+    if org_toggle:
+        org_selection = st.multiselect(
+            "Organization",
+            options=organizations,
+            default=organizations,
+            placeholder="Select organization(s)" if organizations else "No organizations available"
+        ) if organizations else []
+    else:
+        org_selection = organizations
+
+    # 3. Plan Start Date (single line)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        plan_start_later_toggle = st.toggle("Plan Start Later Than", value=False, key="gantt_plan_start_later_toggle") if pd.notna(min_start) else False
+        if plan_start_later_toggle and pd.notna(min_start):
+            plan_start_later_value = st.date_input(
+                "Plan Start Later Than",
+                value=min_start.date(),
+                min_value=min_start.date(),
+                max_value=max_start.date() if pd.notna(max_start) else min_start.date(),
+                key="gantt_plan_start_later_value"
+            )
+        else:
+            plan_start_later_value = None
+    with col2:
+        plan_start_earlier_toggle = st.toggle("Plan Start Earlier Than", value=False, key="gantt_plan_start_earlier_toggle") if pd.notna(max_start) else False
+        if plan_start_earlier_toggle and pd.notna(max_start):
+            plan_start_earlier_value = st.date_input(
+                "Plan Start Earlier Than",
+                value=max_start.date(),
+                min_value=min_start.date() if pd.notna(min_start) else max_start.date(),
+                max_value=max_start.date(),
+                key="gantt_plan_start_earlier_value"
+            )
+        else:
+            plan_start_earlier_value = None
+
+    # 4. Plan Finish Date (single line)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        plan_finish_later_toggle = st.toggle("Plan Finish Later Than", value=False, key="gantt_plan_finish_later_toggle") if pd.notna(min_finish) else False
+        if plan_finish_later_toggle and pd.notna(min_finish):
+            plan_finish_later_value = st.date_input(
+                "Plan Finish Later Than",
+                value=min_finish.date(),
+                min_value=min_finish.date(),
+                max_value=max_finish.date() if pd.notna(max_finish) else min_finish.date(),
+                key="gantt_plan_finish_later_value"
+            )
+        else:
+            plan_finish_later_value = None
+    with col2:
+        plan_finish_earlier_toggle = st.toggle("Plan Finish Earlier Than", value=False, key="gantt_plan_finish_earlier_toggle") if pd.notna(max_finish) else False
+        if plan_finish_earlier_toggle and pd.notna(max_finish):
+            plan_finish_earlier_value = st.date_input(
+                "Plan Finish Earlier Than",
+                value=max_finish.date(),
+                min_value=min_finish.date() if pd.notna(min_finish) else max_finish.date(),
+                max_value=max_finish.date(),
+                key="gantt_plan_finish_earlier_value"
+            )
+        else:
+            plan_finish_earlier_value = None
+
+    # 5. Original Duration (single line)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        od_min_toggle = st.toggle("Set Min OD", value=False, key="gantt_od_min_toggle", help="Filter by minimum Original Duration (months)")
+        if od_min_toggle:
+            od_min_value = st.number_input(
+                "Min OD (months)",
+                value=min_od,
+                step=max(1.0, (max_od - min_od) / 10) if max_od > min_od else 1.0,
+                min_value=0.0,
+                key="gantt_od_min_value"
+            )
+        else:
+            od_min_value = min_od
+    with col2:
+        od_max_toggle = st.toggle("Set Max OD", value=False, key="gantt_od_max_toggle", help="Filter by maximum Original Duration (months)")
+        if od_max_toggle:
+            od_max_value = st.number_input(
+                "Max OD (months)",
+                value=max_od,
+                step=max(1.0, (max_od - min_od) / 10) if max_od > min_od else 1.0,
+                min_value=0.0,
+                key="gantt_od_max_value"
+            )
+        else:
+            od_max_value = max_od
+
+    # 6. Budget (single line)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        min_budget_toggle = st.toggle("Set Min Budget", value=False, key="gantt_min_budget_toggle")
+        if min_budget_toggle:
             min_budget_value = st.number_input(
                 "Min Budget",
                 value=min_budget,
                 step=max(1.0, (max_budget - min_budget) / 10) if max_budget > min_budget else 1.0,
                 min_value=0.0,
                 key="gantt_min_budget_value"
-            ) if min_budget_toggle else min_budget
-
-            max_budget_toggle = st.toggle("Set Max Budget", value=False, key="gantt_max_budget_toggle")
+            )
+        else:
+            min_budget_value = min_budget
+    with col2:
+        max_budget_toggle = st.toggle("Set Max Budget", value=False, key="gantt_max_budget_toggle")
+        if max_budget_toggle:
             max_budget_value = st.number_input(
                 "Max Budget",
                 value=max_budget,
                 step=max(1.0, (max_budget - min_budget) / 10) if max_budget > min_budget else 1.0,
                 min_value=0.0,
                 key="gantt_max_budget_value"
-            ) if max_budget_toggle else max_budget
+            )
+        else:
+            max_budget_value = max_budget
 
-        with col3:
-            start_date_toggle = st.toggle("Set Start Date", value=False, key="gantt_start_date_toggle") if pd.notna(min_start) else False
-            if start_date_toggle and pd.notna(min_start):
-                start_date_value = st.date_input(
-                    "Plan Start On/After",
-                    value=min_start.date(),
-                    min_value=min_start.date(),
-                    max_value=max_start.date() if pd.notna(max_start) else min_start.date(),
-                    key="gantt_start_date_value"
-                )
-            else:
-                start_date_value = None
-
-            end_date_toggle = st.toggle("Set End Date", value=False, key="gantt_end_date_toggle") if pd.notna(max_start) else False
-            if end_date_toggle and pd.notna(max_start):
-                end_date_value = st.date_input(
-                    "Plan Start On/Before",
-                    value=max_start.date(),
-                    min_value=min_start.date() if pd.notna(min_start) else max_start.date(),
-                    max_value=max_start.date(),
-                    key="gantt_end_date_value"
-                )
-            else:
-                end_date_value = None
-
-    col_toggle, col_period = st.columns([1, 1])
-    with col_toggle:
-        show_predicted = st.toggle("Predicted View", value=True, key="gantt_predicted_view")
-        st.caption(f"Mode: {'Predicted' if show_predicted else 'Plan'}")
-    with col_period:
-        period_choice = st.radio("Period", list(PERIOD_OPTIONS.keys()), horizontal=True)
-
+    # Apply filters
     filtered = df.copy()
-    if organizations and org_selection:
+
+    # Organization filter
+    if org_toggle and organizations and org_selection:
         filtered = filtered[filtered["organization"].isin(org_selection)]
 
+    # Plan Start date filters
+    if plan_start_later_value is not None:
+        plan_start_later_dt = pd.to_datetime(plan_start_later_value)
+        filtered = filtered[filtered["plan_start"] >= plan_start_later_dt]
+
+    if plan_start_earlier_value is not None:
+        plan_start_earlier_dt = pd.to_datetime(plan_start_earlier_value)
+        filtered = filtered[filtered["plan_start"] <= plan_start_earlier_dt]
+
+    # Plan Finish date filters
+    if plan_finish_later_value is not None:
+        plan_finish_later_dt = pd.to_datetime(plan_finish_later_value)
+        filtered = filtered[filtered["plan_finish"] >= plan_finish_later_dt]
+
+    if plan_finish_earlier_value is not None:
+        plan_finish_earlier_dt = pd.to_datetime(plan_finish_earlier_value)
+        filtered = filtered[filtered["plan_finish"] <= plan_finish_earlier_dt]
+
+    # Original Duration filters
+    if "original_duration_months" in filtered.columns:
+        if od_min_toggle:
+            filtered = filtered[filtered["original_duration_months"] >= od_min_value]
+        if od_max_toggle:
+            filtered = filtered[filtered["original_duration_months"] <= od_max_value]
+
+    # Budget filters
     if "bac" in filtered.columns:
         if min_budget_toggle:
             filtered = filtered[filtered["bac"] >= min_budget_value]
         if max_budget_toggle:
             filtered = filtered[filtered["bac"] <= max_budget_value]
-
-    if start_date_value is not None:
-        start_dt = pd.to_datetime(start_date_value)
-        filtered = filtered[filtered["plan_start"] >= start_dt]
-
-    if end_date_value is not None:
-        end_dt = pd.to_datetime(end_date_value)
-        filtered = filtered[filtered["plan_start"] <= end_dt]
 
     return filtered, show_predicted, period_choice
 
@@ -181,7 +310,34 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
         organization = row.get("organization", "")
 
         bac = row.get("bac", 0.0)
+        ac = row.get("ac", 0.0)
         earned_value = row.get("earned_value", 0.0)
+        cpi = row.get("cost_performance_index", 0.0)
+        spi = row.get("schedule_performance_index", 0.0)
+        actual_duration = row.get("actual_duration_months", 0.0)
+        original_duration = row.get("original_duration_months", 0.0)
+
+        # Calculate percentages
+        percent_budget_used = (ac / bac * 100) if is_valid_finite_number(bac) and bac > 0 else 0.0
+        percent_time_used = (actual_duration / original_duration * 100) if is_valid_finite_number(original_duration) and original_duration > 0 else 0.0
+        percent_work_completed = (earned_value / bac * 100) if is_valid_finite_number(bac) and bac > 0 else 0.0
+
+        # Get currency settings from session state
+        currency_symbol = (
+            getattr(st.session_state, 'dashboard_currency_symbol', None) or
+            getattr(st.session_state, 'currency_symbol', None) or
+            st.session_state.get('config_dict', {}).get('controls', {}).get('currency_symbol', '$')
+        )
+        currency_postfix = (
+            getattr(st.session_state, 'dashboard_currency_postfix', None) or
+            getattr(st.session_state, 'currency_postfix', None) or
+            st.session_state.get('config_dict', {}).get('controls', {}).get('currency_postfix', '')
+        )
+
+        # Format values for tooltip
+        bac_formatted = format_currency(bac, currency_symbol, currency_postfix)
+        plan_start_str = start.strftime('%Y-%m-%d') if pd.notna(start) else "N/A"
+        plan_finish_str = finish.strftime('%Y-%m-%d') if pd.notna(finish) else "N/A"
         if pd.isna(bac) or bac <= 0:
             progress_ratio = 0.0
         else:
@@ -201,7 +357,15 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
             "Finish": progress_end,
             "Segment": "Progress",
             "project_name": project_name,
-            "organization": organization
+            "organization": organization,
+            "bac_formatted": bac_formatted,
+            "plan_start": plan_start_str,
+            "plan_finish": plan_finish_str,
+            "cpi": cpi,
+            "spi": spi,
+            "percent_budget_used": percent_budget_used,
+            "percent_time_used": percent_time_used,
+            "percent_work_completed": percent_work_completed
         })
 
         if progress_end < finish:
@@ -211,7 +375,15 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
                 "Finish": finish,
                 "Segment": "Planned",
                 "project_name": project_name,
-                "organization": organization
+                "organization": organization,
+                "bac_formatted": bac_formatted,
+                "plan_start": plan_start_str,
+                "plan_finish": plan_finish_str,
+                "cpi": cpi,
+                "spi": spi,
+                "percent_budget_used": percent_budget_used,
+                "percent_time_used": percent_time_used,
+                "percent_work_completed": percent_work_completed
             })
 
         forecast_finish = row.get("forecast_completion")
@@ -222,7 +394,15 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
                 "Finish": forecast_finish,
                 "Segment": "Overrun",
                 "project_name": project_name,
-                "organization": organization
+                "organization": organization,
+                "bac_formatted": bac_formatted,
+                "plan_start": plan_start_str,
+                "plan_finish": plan_finish_str,
+                "cpi": cpi,
+                "spi": spi,
+                "percent_budget_used": percent_budget_used,
+                "percent_time_used": percent_time_used,
+                "percent_work_completed": percent_work_completed
             })
 
     return segments
@@ -261,17 +441,23 @@ def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str) -> 
         color="Segment",
         color_discrete_map=COLOR_MAP,
         category_orders={"Task": category_order},
-        custom_data=["project_name", "organization", "Segment"]
+        custom_data=["project_name", "organization", "Segment", "bac_formatted", "plan_start", "plan_finish", "cpi", "spi", "percent_budget_used", "percent_time_used", "percent_work_completed"]
     )
 
     fig.update_traces(
         hovertemplate=(
             "<b>Project ID:</b> %{y}<br>"
-            "<b>Project:</b> %{customdata[0]}<br>"
+            "<b>Project Name:</b> %{customdata[0]}<br>"
             "<b>Organization:</b> %{customdata[1]}<br>"
-            "<b>Segment:</b> %{customdata[2]}<br>"
-            "<b>Start:</b> %{x|%Y-%m-%d}<br>"
-            "<b>Finish:</b> %{x_end|%Y-%m-%d}<extra></extra>"
+            "<b>BAC:</b> %{customdata[3]}<br>"
+            "<b>Plan Start:</b> %{customdata[4]}<br>"
+            "<b>Plan Finish:</b> %{customdata[5]}<br>"
+            "<b>CPI:</b> %{customdata[6]:.2f}<br>"
+            "<b>SPI:</b> %{customdata[7]:.2f}<br>"
+            "<b>% Budget Used:</b> %{customdata[8]:.1f}%<br>"
+            "<b>% Time Used:</b> %{customdata[9]:.1f}%<br>"
+            "<b>% Work Completed:</b> %{customdata[10]:.1f}%<br>"
+            "<b>Segment:</b> %{customdata[2]}<extra></extra>"
         )
     )
 
@@ -415,7 +601,7 @@ def render_footer():
         """
         <div class="footer">
             <div style="border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem; margin-top: 2rem;">
-                <strong>Portfolio Gantt Chart</strong> • Schedule Performance Overview<br>
+                <strong>Project Portfolio Intelligence Suite</strong> • Schedule Performance Overview<br>
                 Generated on {date} • Confidential Executive Report
             </div>
         </div>
@@ -425,15 +611,20 @@ def render_footer():
 
 
 def main():
-    st.title("📅 Portfolio Gantt Chart")
+    st.title("📅 Project Portfolio Intelligence Suite")
     st.markdown(
         """
         <div style='color:#003366; font-size:16px; line-height:1.4;'>
-            Portfolio Schedule Intelligence & Executive Decision Support<br>
-            Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
+            Smarter Projects and Portfolios with Earned Value Analysis
+            and AI-Powered Executive Reporting
         </div>
         """,
         unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "Developed by Dr. Khalid Ahmad Khan – "
+        "[LinkedIn](https://www.linkedin.com/in/khalidahmadkhan/)"
     )
 
     df = load_portfolio_dataframe()
@@ -445,7 +636,7 @@ def main():
     for col in ["plan_start", "plan_finish", "data_date", "forecast_completion"]:
         if col in df.columns:
             df[col] = _coerce_datetime(df[col])
-    for col in ["bac", "earned_value"]:
+    for col in ["bac", "ac", "earned_value", "original_duration_months", "actual_duration_months", "cost_performance_index", "schedule_performance_index"]:
         if col in df.columns:
             df[col] = _coerce_numeric(df[col])
 
