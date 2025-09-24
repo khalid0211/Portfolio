@@ -140,15 +140,15 @@ with col1:
         st.switch_page("pages/6_EVM_Simulator.py")
 
 with col2:
-    # Placeholder for potential future tool or info
     st.markdown("""
-    #### 🔮 Coming Soon
-    - Advanced forecasting models
-    - Risk analysis integration
-    - Portfolio optimization
-    - AI-powered insights
+    #### 📈 Portfolio Gantt Chart
+    - Interactive baseline vs forecast timeline
+    - Organization, budget, and date filtering
+    - EV progress shading with forecast alerts
+    - Hover insights for project detail
     """)
-    st.info("🚧 Future enhancements planned")
+    if st.button("📊 Open Gantt Chart", key="gantt_btn", use_container_width=True):
+        st.switch_page("pages/4_Gantt_Chart.py")
 
 
 # Quick stats if data exists
