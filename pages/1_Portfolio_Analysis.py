@@ -2638,33 +2638,53 @@ def render_controls_section():
     }
     st.json(actual_widget_values)
 
-    # Curve settings
-    curve_type = st.selectbox(
-        "Curve Type (PV)",
-        ["Linear", "S-Curve"],
-        index=0 if saved_controls.get('curve_type', 'linear').lower() == 'linear' else 1,
-        key="curve_type_select"
-    )
+    # Curve settings with error handling
+    try:
+        curve_type = st.selectbox(
+            "Curve Type (PV)",
+            ["Linear", "S-Curve"],
+            index=0 if saved_controls.get('curve_type', 'linear').lower() == 'linear' else 1,
+            key="curve_type_select"
+        )
+    except Exception as e:
+        st.error(f"Error in curve_type selectbox: {e}")
+        curve_type = "Linear"
     
     if curve_type == "S-Curve":
         col1, col2 = st.columns(2)
         with col1:
-            alpha = st.number_input("S-Curve α", min_value=0.1, max_value=10.0,
-                                  value=saved_controls.get('alpha', 2.0), step=0.1, key="s_alpha")
+            try:
+                alpha = st.number_input("S-Curve α", min_value=0.1, max_value=10.0,
+                                      value=float(saved_controls.get('alpha', 2.0)), step=0.1, key="s_alpha")
+            except Exception as e:
+                st.error(f"Error in alpha number_input: {e}")
+                alpha = 2.0
         with col2:
-            beta = st.number_input("S-Curve β", min_value=0.1, max_value=10.0,
-                                 value=saved_controls.get('beta', 2.0), step=0.1, key="s_beta")
+            try:
+                beta = st.number_input("S-Curve β", min_value=0.1, max_value=10.0,
+                                     value=float(saved_controls.get('beta', 2.0)), step=0.1, key="s_beta")
+            except Exception as e:
+                st.error(f"Error in beta number_input: {e}")
+                beta = 2.0
     else:
         alpha, beta = 2.0, 2.0
     
-    # Date and financial settings
+    # Date and financial settings with robust error handling
     saved_date = saved_controls.get('data_date')
-    if saved_date and isinstance(saved_date, str):
-        try:
-            saved_date = datetime.fromisoformat(saved_date).date()
-        except:
+    try:
+        if saved_date and isinstance(saved_date, str):
+            # Try different date formats
+            try:
+                saved_date = datetime.fromisoformat(saved_date).date()
+            except ValueError:
+                try:
+                    saved_date = datetime.strptime(saved_date, '%Y-%m-%d').date()
+                except ValueError:
+                    saved_date = date.today()
+        elif not isinstance(saved_date, date):
             saved_date = date.today()
-    elif not isinstance(saved_date, date):
+    except Exception as e:
+        st.error(f"Date parsing error: {e}")
         saved_date = date.today()
 
     data_date = st.date_input(
@@ -2677,34 +2697,46 @@ def render_controls_section():
     
     
     
-    inflation_rate = st.number_input(
-        "Inflation Rate (% APR)",
-        min_value=0.0, max_value=100.0,
-        value=saved_controls.get('inflation_rate', 12.0), step=0.1,
-        key="controls_inflation"
-    )
+    try:
+        inflation_rate = st.number_input(
+            "Inflation Rate (% APR)",
+            min_value=0.0, max_value=100.0,
+            value=float(saved_controls.get('inflation_rate', 12.0)), step=0.1,
+            key="controls_inflation"
+        )
+    except Exception as e:
+        st.error(f"Error in inflation_rate number_input: {e}")
+        inflation_rate = 12.0
     
     # Currency settings
     st.markdown("**Currency Settings**")
     col1, col2 = st.columns(2)
     with col1:
-        currency_symbol = st.text_input("Currency Symbol",
-                                       value=saved_controls.get('currency_symbol', "PKR"),
-                                       max_chars=10, key="currency_symbol")
-    with col2:
-        postfix_options = ["", "Thousand", "Million", "Billion"]
-        saved_postfix = saved_controls.get('currency_postfix', "")
         try:
-            postfix_index = postfix_options.index(saved_postfix)
-        except ValueError:
-            postfix_index = 0
+            currency_symbol = st.text_input("Currency Symbol",
+                                           value=saved_controls.get('currency_symbol', "PKR"),
+                                           max_chars=10, key="currency_symbol")
+        except Exception as e:
+            st.error(f"Error in currency_symbol text_input: {e}")
+            currency_symbol = "PKR"
+    with col2:
+        try:
+            postfix_options = ["", "Thousand", "Million", "Billion"]
+            saved_postfix = saved_controls.get('currency_postfix', "")
+            try:
+                postfix_index = postfix_options.index(saved_postfix)
+            except ValueError:
+                postfix_index = 0
 
-        currency_postfix = st.selectbox(
-            "Currency Postfix",
-            postfix_options,
-            index=postfix_index,
-            key="currency_postfix"
-        )
+            currency_postfix = st.selectbox(
+                "Currency Postfix",
+                postfix_options,
+                index=postfix_index,
+                key="currency_postfix"
+            )
+        except Exception as e:
+            st.error(f"Error in currency_postfix selectbox: {e}")
+            currency_postfix = ""
     
     st.markdown('</div>', unsafe_allow_html=True)
     
