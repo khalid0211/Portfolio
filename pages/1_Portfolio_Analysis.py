@@ -2544,76 +2544,13 @@ def render_controls_section():
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">B. Controls</div>', unsafe_allow_html=True)
 
-    # Load saved controls from JSON (if any) - with aggressive fallback for cloud
+    # Load saved controls from JSON (if any)
     saved_controls = st.session_state.config_dict.get('controls', {})
 
-    # COMPREHENSIVE FALLBACK CHAIN for cloud compatibility
-    if not saved_controls:
-        # Try multiple sources in order of preference
-        sources_to_try = [
-            ('config_dict.controls', lambda: st.session_state.config_dict.get('controls')),
-            ('json_loaded_controls', lambda: getattr(st.session_state, 'json_loaded_controls', None)),
-            ('backup_controls', lambda: getattr(st.session_state, 'backup_controls', None)),
-            ('force_values', lambda: {
-                'curve_type': getattr(st.session_state, 'force_curve_type', None),
-                'alpha': getattr(st.session_state, 'force_alpha', None),
-                'beta': getattr(st.session_state, 'force_beta', None),
-                'currency_symbol': getattr(st.session_state, 'force_currency_symbol', None),
-                'currency_postfix': getattr(st.session_state, 'force_currency_postfix', None),
-                'inflation_rate': getattr(st.session_state, 'force_inflation_rate', None)
-            } if getattr(st.session_state, 'json_controls_active', False) else None)
-        ]
 
-        for source_name, source_func in sources_to_try:
-            try:
-                potential_controls = source_func()
-                if potential_controls and isinstance(potential_controls, dict):
-                    # Filter out None values
-                    saved_controls = {k: v for k, v in potential_controls.items() if v is not None}
-                    if saved_controls:
-                        st.info(f"🔄 **Using controls from: {source_name}**")
-                        break
-            except Exception as e:
-                continue
-
-    # COMPREHENSIVE DIAGNOSTICS for cloud debugging
-    st.error("🔍 **CLOUD DEBUG: Controls Section State**")
-
-    # Show all widget states
-    widget_diagnostic = {
-        'saved_controls_from_config': saved_controls,
-        'session_state_widget_keys': {
-            'curve_type_select': st.session_state.get('curve_type_select', 'NOT_IN_SESSION'),
-            's_alpha': st.session_state.get('s_alpha', 'NOT_IN_SESSION'),
-            's_beta': st.session_state.get('s_beta', 'NOT_IN_SESSION'),
-            'currency_symbol': st.session_state.get('currency_symbol', 'NOT_IN_SESSION'),
-            'currency_postfix': st.session_state.get('currency_postfix', 'NOT_IN_SESSION'),
-            'controls_inflation': st.session_state.get('controls_inflation', 'NOT_IN_SESSION')
-        },
-        'config_dict_controls': st.session_state.config_dict.get('controls', 'NO_CONTROLS_IN_CONFIG'),
-        'data_loaded': st.session_state.get('data_loaded', False),
-        'file_type': st.session_state.get('file_type', 'NO_FILE_TYPE')
-    }
-
-    st.json(widget_diagnostic)
-
-    # Show what values the widgets will actually use
-    st.warning("📊 **Widget Values That Will Be Used:**")
-    actual_widget_values = {
-        'curve_type_index': st.session_state.get('curve_type_select', 'NOT_SET'),
-        'alpha_value': st.session_state.get('s_alpha', 'NOT_SET'),
-        'beta_value': st.session_state.get('s_beta', 'NOT_SET'),
-        'currency_symbol_value': st.session_state.get('currency_symbol', 'NOT_SET'),
-        'currency_postfix_index': st.session_state.get('currency_postfix', 'NOT_SET'),
-        'inflation_value': st.session_state.get('controls_inflation', 'NOT_SET')
-    }
-    st.json(actual_widget_values)
-
-    # Curve settings - simple approach using saved_controls
+    # Curve settings
     curve_value = saved_controls.get('curve_type', 'linear').lower()
     curve_index = 0 if curve_value == 'linear' else 1
-
-    st.info(f"🔧 **DEBUG**: curve_type='{curve_value}', calculated_index={curve_index}")
 
     curve_type = st.selectbox(
         "Curve Type (PV)",
@@ -2658,14 +2595,11 @@ def render_controls_section():
         st.error(f"Date parsing error: {e}")
         saved_date = date.today()
 
-    st.info(f"🔧 **DEBUG**: data_date from JSON='{saved_controls.get('data_date', 'N/A')}', parsed_date={saved_date}")
-
     data_date = st.date_input(
         "Data Date",
-        value=saved_date,                     # use saved value or default
-        min_value=date(2000, 1, 1),           # lower limit
-        max_value=date(2035, 12, 31)          # upper limit
-        # Removed key to prevent session state interference
+        value=saved_date,
+        min_value=date(2000, 1, 1),
+        max_value=date(2035, 12, 31)
     )
     
     
@@ -2685,15 +2619,11 @@ def render_controls_section():
     st.markdown("**Currency Settings**")
     col1, col2 = st.columns(2)
     with col1:
-        currency_value = saved_controls.get('currency_symbol', "PKR")
-        st.info(f"🔧 **DEBUG**: currency_symbol from JSON='{currency_value}'")
-
         currency_symbol = st.text_input("Currency Symbol",
-                                       value=currency_value,
+                                       value=saved_controls.get('currency_symbol', "PKR"),
                                        max_chars=10)
-                                       # Removed key to prevent session state interference
     with col2:
-        # Currency postfix - simple approach using saved_controls
+        # Currency postfix
         postfix_options = ["", "Thousand", "Million", "Billion"]
         saved_postfix = saved_controls.get('currency_postfix', "")
 
@@ -2701,8 +2631,6 @@ def render_controls_section():
             postfix_index = postfix_options.index(saved_postfix)
         except ValueError:
             postfix_index = 0
-
-        st.info(f"🔧 **DEBUG**: currency_postfix='{saved_postfix}', calculated_index={postfix_index}")
 
         currency_postfix = st.selectbox(
             "Currency Postfix",
