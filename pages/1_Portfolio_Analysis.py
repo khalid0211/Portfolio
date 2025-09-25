@@ -2232,21 +2232,31 @@ def render_data_source_section():
                             st.session_state.json_loaded_controls = controls.copy()
                             st.session_state.backup_controls = controls.copy()
 
-                            # Method 2: FORCE widget session state keys directly (this is the key fix!)
-                            st.session_state['curve_type_select'] = 1 if controls.get('curve_type', 'linear').lower() == 's-curve' else 0
-                            st.session_state['s_alpha'] = controls.get('alpha', 2.0)
-                            st.session_state['s_beta'] = controls.get('beta', 2.0)
-                            st.session_state['currency_symbol'] = controls.get('currency_symbol', 'PKR')
+                            # Method 2: FORCE widget session state keys directly with type safety
 
-                            # Handle currency postfix dropdown index
+                            # Clear any existing problematic session state keys first
+                            problematic_keys = ['curve_type_select', 'currency_postfix']
+                            for key in problematic_keys:
+                                if key in st.session_state:
+                                    del st.session_state[key]
+
+                            # Set values with explicit type conversion
+                            curve_index = 1 if controls.get('curve_type', 'linear').lower() == 's-curve' else 0
+                            st.session_state['curve_type_select'] = int(curve_index)
+
+                            st.session_state['s_alpha'] = float(controls.get('alpha', 2.0))
+                            st.session_state['s_beta'] = float(controls.get('beta', 2.0))
+                            st.session_state['currency_symbol'] = str(controls.get('currency_symbol', 'PKR'))
+
+                            # Handle currency postfix dropdown index with explicit type conversion
                             postfix_options = ["", "Thousand", "Million", "Billion"]
                             try:
                                 postfix_index = postfix_options.index(controls.get('currency_postfix', ''))
-                                st.session_state['currency_postfix'] = postfix_index
+                                st.session_state['currency_postfix'] = int(postfix_index)
                             except ValueError:
-                                st.session_state['currency_postfix'] = 0
+                                st.session_state['currency_postfix'] = int(0)
 
-                            st.session_state['controls_inflation'] = controls.get('inflation_rate', 12.0)
+                            st.session_state['controls_inflation'] = float(controls.get('inflation_rate', 12.0))
 
                             # Method 3: Set a flag that JSON was loaded
                             st.session_state.json_controls_active = True
@@ -2640,15 +2650,27 @@ def render_controls_section():
 
     # Curve settings with error handling
     try:
+        # Calculate index safely
+        curve_value = saved_controls.get('curve_type', 'linear').lower()
+        curve_index = 0 if curve_value == 'linear' else 1
+
+        # Ensure it's a proper integer
+        curve_index = int(curve_index)
+
         curve_type = st.selectbox(
             "Curve Type (PV)",
             ["Linear", "S-Curve"],
-            index=0 if saved_controls.get('curve_type', 'linear').lower() == 'linear' else 1,
+            index=curve_index,
             key="curve_type_select"
         )
     except Exception as e:
         st.error(f"Error in curve_type selectbox: {e}")
-        curve_type = "Linear"
+        # Try without key to bypass session state
+        curve_type = st.selectbox(
+            "Curve Type (PV) [Fallback]",
+            ["Linear", "S-Curve"],
+            index=0
+        )
     
     if curve_type == "S-Curve":
         col1, col2 = st.columns(2)
@@ -2723,10 +2745,15 @@ def render_controls_section():
         try:
             postfix_options = ["", "Thousand", "Million", "Billion"]
             saved_postfix = saved_controls.get('currency_postfix', "")
+
+            # Calculate index safely
             try:
                 postfix_index = postfix_options.index(saved_postfix)
             except ValueError:
                 postfix_index = 0
+
+            # Ensure it's a proper integer
+            postfix_index = int(postfix_index)
 
             currency_postfix = st.selectbox(
                 "Currency Postfix",
@@ -2736,7 +2763,12 @@ def render_controls_section():
             )
         except Exception as e:
             st.error(f"Error in currency_postfix selectbox: {e}")
-            currency_postfix = ""
+            # Try without key to bypass session state
+            currency_postfix = st.selectbox(
+                "Currency Postfix [Fallback]",
+                ["", "Thousand", "Million", "Billion"],
+                index=0
+            )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
