@@ -2224,38 +2224,27 @@ def render_data_source_section():
                         st.session_state.original_filename = filename
                         st.session_state.file_type = 'json'
 
-                        # Store loaded controls with special handling for Streamlit Cloud
+                        # Store loaded controls with MULTIPLE redundant storage mechanisms for Streamlit Cloud
                         if 'controls' in config_data:
-                            # CRITICAL: Set form widget keys to prevent overwriting on rerun
                             controls = config_data['controls']
 
-                            # Set Streamlit widget keys to preserve values
-                            if 'curve_type' in controls:
-                                widget_key = "curve_type_select"
-                                if widget_key not in st.session_state:
-                                    st.session_state[widget_key] = 1 if controls['curve_type'].lower() == 's-curve' else 0
+                            # Method 1: Store in multiple session state locations
+                            st.session_state.json_loaded_controls = controls.copy()
+                            st.session_state.backup_controls = controls.copy()
 
-                            if 'alpha' in controls and 's_alpha' not in st.session_state:
-                                st.session_state['s_alpha'] = controls['alpha']
+                            # Method 2: Force widget values with override flags
+                            st.session_state.force_curve_type = controls.get('curve_type', 'linear')
+                            st.session_state.force_alpha = controls.get('alpha', 2.0)
+                            st.session_state.force_beta = controls.get('beta', 2.0)
+                            st.session_state.force_currency_symbol = controls.get('currency_symbol', 'PKR')
+                            st.session_state.force_currency_postfix = controls.get('currency_postfix', '')
+                            st.session_state.force_inflation_rate = controls.get('inflation_rate', 12.0)
 
-                            if 'beta' in controls and 's_beta' not in st.session_state:
-                                st.session_state['s_beta'] = controls['beta']
+                            # Method 3: Set a flag that JSON was loaded
+                            st.session_state.json_controls_active = True
 
-                            if 'currency_symbol' in controls and 'currency_symbol' not in st.session_state:
-                                st.session_state['currency_symbol'] = controls['currency_symbol']
-
-                            if 'currency_postfix' in controls and 'currency_postfix' not in st.session_state:
-                                postfix_options = ["", "Thousand", "Million", "Billion"]
-                                try:
-                                    idx = postfix_options.index(controls['currency_postfix'])
-                                    st.session_state['currency_postfix'] = idx
-                                except ValueError:
-                                    st.session_state['currency_postfix'] = 0
-
-                            if 'inflation_rate' in controls and 'controls_inflation' not in st.session_state:
-                                st.session_state['controls_inflation'] = controls['inflation_rate']
-
-                            st.success(f"✅ JSON settings applied: {controls.get('curve_type', 'N/A')}, {controls.get('currency_symbol', 'N/A')} {controls.get('currency_postfix', 'N/A')}")
+                            st.success(f"✅ JSON settings loaded: {controls.get('curve_type', 'N/A')}, {controls.get('currency_symbol', 'N/A')} {controls.get('currency_postfix', 'N/A')}")
+                            st.info("🔄 **If settings don't appear below, try clicking any control to refresh**")
                     else:
                         st.warning("⚠️ No project data found in JSON file")
                         
@@ -2571,8 +2560,58 @@ def render_controls_section():
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">B. Controls</div>', unsafe_allow_html=True)
 
-    # Load saved controls from JSON (if any)
+    # Load saved controls from JSON (if any) - with aggressive fallback for cloud
     saved_controls = st.session_state.config_dict.get('controls', {})
+
+    # COMPREHENSIVE FALLBACK CHAIN for cloud compatibility
+    if not saved_controls:
+        # Try multiple sources in order of preference
+        sources_to_try = [
+            ('config_dict.controls', lambda: st.session_state.config_dict.get('controls')),
+            ('json_loaded_controls', lambda: getattr(st.session_state, 'json_loaded_controls', None)),
+            ('backup_controls', lambda: getattr(st.session_state, 'backup_controls', None)),
+            ('force_values', lambda: {
+                'curve_type': getattr(st.session_state, 'force_curve_type', None),
+                'alpha': getattr(st.session_state, 'force_alpha', None),
+                'beta': getattr(st.session_state, 'force_beta', None),
+                'currency_symbol': getattr(st.session_state, 'force_currency_symbol', None),
+                'currency_postfix': getattr(st.session_state, 'force_currency_postfix', None),
+                'inflation_rate': getattr(st.session_state, 'force_inflation_rate', None)
+            } if getattr(st.session_state, 'json_controls_active', False) else None)
+        ]
+
+        for source_name, source_func in sources_to_try:
+            try:
+                potential_controls = source_func()
+                if potential_controls and isinstance(potential_controls, dict):
+                    # Filter out None values
+                    saved_controls = {k: v for k, v in potential_controls.items() if v is not None}
+                    if saved_controls:
+                        st.info(f"🔄 **Using controls from: {source_name}**")
+                        break
+            except Exception as e:
+                continue
+
+    # COMPREHENSIVE DIAGNOSTICS for cloud debugging
+    st.error("🔍 **CLOUD DEBUG: Controls Section State**")
+
+    # Show all widget states
+    widget_diagnostic = {
+        'saved_controls_from_config': saved_controls,
+        'session_state_widget_keys': {
+            'curve_type_select': st.session_state.get('curve_type_select', 'NOT_IN_SESSION'),
+            's_alpha': st.session_state.get('s_alpha', 'NOT_IN_SESSION'),
+            's_beta': st.session_state.get('s_beta', 'NOT_IN_SESSION'),
+            'currency_symbol': st.session_state.get('currency_symbol', 'NOT_IN_SESSION'),
+            'currency_postfix': st.session_state.get('currency_postfix', 'NOT_IN_SESSION'),
+            'controls_inflation': st.session_state.get('controls_inflation', 'NOT_IN_SESSION')
+        },
+        'config_dict_controls': st.session_state.config_dict.get('controls', 'NO_CONTROLS_IN_CONFIG'),
+        'data_loaded': st.session_state.get('data_loaded', False),
+        'file_type': st.session_state.get('file_type', 'NO_FILE_TYPE')
+    }
+
+    st.json(widget_diagnostic)
 
     # Curve settings
     curve_type = st.selectbox(
