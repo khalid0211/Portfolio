@@ -2224,14 +2224,38 @@ def render_data_source_section():
                         st.session_state.original_filename = filename
                         st.session_state.file_type = 'json'
 
-                        # Force persistence for cloud deployment - explicitly save critical config
+                        # Store loaded controls with special handling for Streamlit Cloud
                         if 'controls' in config_data:
-                            st.session_state.json_controls_loaded = config_data['controls']
-                            # Debug info for cloud deployment
-                            st.info(f"✅ Loaded settings: Curve={config_data['controls'].get('curve_type', 'N/A')}, Currency={config_data['controls'].get('currency_symbol', 'N/A')}")
+                            # CRITICAL: Set form widget keys to prevent overwriting on rerun
+                            controls = config_data['controls']
 
-                        # Also store in a more persistent way for cloud
-                        st.session_state.last_json_config = config_data.copy()
+                            # Set Streamlit widget keys to preserve values
+                            if 'curve_type' in controls:
+                                widget_key = "curve_type_select"
+                                if widget_key not in st.session_state:
+                                    st.session_state[widget_key] = 1 if controls['curve_type'].lower() == 's-curve' else 0
+
+                            if 'alpha' in controls and 's_alpha' not in st.session_state:
+                                st.session_state['s_alpha'] = controls['alpha']
+
+                            if 'beta' in controls and 's_beta' not in st.session_state:
+                                st.session_state['s_beta'] = controls['beta']
+
+                            if 'currency_symbol' in controls and 'currency_symbol' not in st.session_state:
+                                st.session_state['currency_symbol'] = controls['currency_symbol']
+
+                            if 'currency_postfix' in controls and 'currency_postfix' not in st.session_state:
+                                postfix_options = ["", "Thousand", "Million", "Billion"]
+                                try:
+                                    idx = postfix_options.index(controls['currency_postfix'])
+                                    st.session_state['currency_postfix'] = idx
+                                except ValueError:
+                                    st.session_state['currency_postfix'] = 0
+
+                            if 'inflation_rate' in controls and 'controls_inflation' not in st.session_state:
+                                st.session_state['controls_inflation'] = controls['inflation_rate']
+
+                            st.success(f"✅ JSON settings applied: {controls.get('curve_type', 'N/A')}, {controls.get('currency_symbol', 'N/A')} {controls.get('currency_postfix', 'N/A')}")
                     else:
                         st.warning("⚠️ No project data found in JSON file")
                         
@@ -2547,27 +2571,8 @@ def render_controls_section():
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">B. Controls</div>', unsafe_allow_html=True)
 
-    # Load saved controls with multiple fallbacks for cloud deployment
+    # Load saved controls from JSON (if any)
     saved_controls = st.session_state.config_dict.get('controls', {})
-
-    # Fallback 1: Check explicitly saved JSON controls
-    if not saved_controls and hasattr(st.session_state, 'json_controls_loaded'):
-        saved_controls = st.session_state.json_controls_loaded.copy()
-
-    # Fallback 2: Check last loaded JSON config
-    if not saved_controls and hasattr(st.session_state, 'last_json_config'):
-        if 'controls' in st.session_state.last_json_config:
-            saved_controls = st.session_state.last_json_config['controls'].copy()
-
-    # Fallback 3: Check for root-level JSON controls (legacy format)
-    if not saved_controls and st.session_state.config_dict:
-        for key in ['curve_type', 'alpha', 'beta', 'currency_symbol', 'currency_postfix']:
-            if key in st.session_state.config_dict:
-                saved_controls[key] = st.session_state.config_dict[key]
-
-    # Debug info for troubleshooting (can be removed later)
-    if saved_controls:
-        st.caption(f"🔧 Using saved settings: {', '.join([f'{k}={v}' for k, v in saved_controls.items() if k in ['curve_type', 'currency_symbol']])}")
 
     # Curve settings
     curve_type = st.selectbox(
@@ -3272,6 +3277,7 @@ def main():
             # Render all sidebar sections in desired order
             df, selected_table, column_mapping = render_data_source_section()
             controls = render_controls_section()
+
             # Store controls in config_dict for JSON export
             st.session_state.config_dict['controls'] = controls
             enable_batch = render_batch_calculation_section()
