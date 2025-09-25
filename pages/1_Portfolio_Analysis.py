@@ -2224,54 +2224,11 @@ def render_data_source_section():
                         st.session_state.original_filename = filename
                         st.session_state.file_type = 'json'
 
-                        # Store loaded controls with MULTIPLE redundant storage mechanisms for Streamlit Cloud
+                        # Simple approach - just confirm the JSON has controls
                         if 'controls' in config_data:
                             controls = config_data['controls']
-
-                            # Method 1: Store in multiple session state locations
-                            st.session_state.json_loaded_controls = controls.copy()
-                            st.session_state.backup_controls = controls.copy()
-
-                            # Method 2: FORCE widget session state keys directly with type safety
-
-                            # Use unique key names to avoid any caching/corruption issues
-                            import time
-                            timestamp = str(int(time.time()))
-
-                            # Set values with unique keys and explicit type conversion
-                            curve_index = 1 if controls.get('curve_type', 'linear').lower() == 's-curve' else 0
-                            curve_key = f'curve_type_json_{timestamp}'
-                            st.session_state[curve_key] = int(curve_index)
-                            st.session_state['json_curve_key'] = curve_key
-
-                            st.session_state['s_alpha'] = float(controls.get('alpha', 2.0))
-                            st.session_state['s_beta'] = float(controls.get('beta', 2.0))
-                            st.session_state['currency_symbol'] = str(controls.get('currency_symbol', 'PKR'))
-
-                            # Handle currency postfix dropdown index with unique key
-                            postfix_options = ["", "Thousand", "Million", "Billion"]
-                            try:
-                                postfix_index = postfix_options.index(controls.get('currency_postfix', ''))
-                                postfix_key = f'currency_postfix_json_{timestamp}'
-                                st.session_state[postfix_key] = int(postfix_index)
-                                st.session_state['json_postfix_key'] = postfix_key
-                            except ValueError:
-                                postfix_key = f'currency_postfix_json_{timestamp}'
-                                st.session_state[postfix_key] = int(0)
-                                st.session_state['json_postfix_key'] = postfix_key
-
-                            st.session_state['controls_inflation'] = float(controls.get('inflation_rate', 12.0))
-
-                            # Method 3: Set a flag that JSON was loaded
-                            st.session_state.json_controls_active = True
-
                             st.success(f"✅ JSON settings loaded: {controls.get('curve_type', 'N/A')}, {controls.get('currency_symbol', 'N/A')} {controls.get('currency_postfix', 'N/A')}")
-                            st.info("✅ **Widget session state has been updated - settings should now appear correctly in Controls section below**")
-
-                            # Force a rerun to update the widgets with new session state values
-                            if not st.session_state.get('json_widgets_updated', False):
-                                st.session_state.json_widgets_updated = True
-                                st.rerun()
+                            st.info("💡 Controls should now show the correct values below")
                     else:
                         st.warning("⚠️ No project data found in JSON file")
                         
@@ -2652,33 +2609,17 @@ def render_controls_section():
     }
     st.json(actual_widget_values)
 
-    # Curve settings with unique key approach
-    try:
-        # Use unique key if available, otherwise calculate from saved_controls
-        if hasattr(st.session_state, 'json_curve_key') and st.session_state.json_curve_key in st.session_state:
-            curve_key = st.session_state.json_curve_key
-            curve_type = st.selectbox(
-                "Curve Type (PV)",
-                ["Linear", "S-Curve"],
-                key=curve_key
-            )
-        else:
-            # Fallback: calculate index from saved_controls
-            curve_value = saved_controls.get('curve_type', 'linear').lower()
-            curve_index = 0 if curve_value == 'linear' else 1
-            curve_type = st.selectbox(
-                "Curve Type (PV)",
-                ["Linear", "S-Curve"],
-                index=curve_index
-            )
-    except Exception as e:
-        st.error(f"Error in curve_type selectbox: {e}")
-        # Final fallback without any session state
-        curve_type = st.selectbox(
-            "Curve Type (PV) [Fallback]",
-            ["Linear", "S-Curve"],
-            index=0
-        )
+    # Curve settings - simple approach using saved_controls
+    curve_value = saved_controls.get('curve_type', 'linear').lower()
+    curve_index = 0 if curve_value == 'linear' else 1
+
+    st.info(f"🔧 **DEBUG**: curve_type='{curve_value}', calculated_index={curve_index}")
+
+    curve_type = st.selectbox(
+        "Curve Type (PV)",
+        ["Linear", "S-Curve"],
+        index=curve_index
+    )
     
     if curve_type == "S-Curve":
         col1, col2 = st.columns(2)
@@ -2750,38 +2691,22 @@ def render_controls_section():
             st.error(f"Error in currency_symbol text_input: {e}")
             currency_symbol = "PKR"
     with col2:
+        # Currency postfix - simple approach using saved_controls
+        postfix_options = ["", "Thousand", "Million", "Billion"]
+        saved_postfix = saved_controls.get('currency_postfix', "")
+
         try:
-            postfix_options = ["", "Thousand", "Million", "Billion"]
+            postfix_index = postfix_options.index(saved_postfix)
+        except ValueError:
+            postfix_index = 0
 
-            # Use unique key if available, otherwise calculate from saved_controls
-            if hasattr(st.session_state, 'json_postfix_key') and st.session_state.json_postfix_key in st.session_state:
-                postfix_key = st.session_state.json_postfix_key
-                currency_postfix = st.selectbox(
-                    "Currency Postfix",
-                    postfix_options,
-                    key=postfix_key
-                )
-            else:
-                # Fallback: calculate index from saved_controls
-                saved_postfix = saved_controls.get('currency_postfix', "")
-                try:
-                    postfix_index = postfix_options.index(saved_postfix)
-                except ValueError:
-                    postfix_index = 0
+        st.info(f"🔧 **DEBUG**: currency_postfix='{saved_postfix}', calculated_index={postfix_index}")
 
-                currency_postfix = st.selectbox(
-                    "Currency Postfix",
-                    postfix_options,
-                    index=postfix_index
-                )
-        except Exception as e:
-            st.error(f"Error in currency_postfix selectbox: {e}")
-            # Final fallback without any session state
-            currency_postfix = st.selectbox(
-                "Currency Postfix [Fallback]",
-                ["", "Thousand", "Million", "Billion"],
-                index=0
-            )
+        currency_postfix = st.selectbox(
+            "Currency Postfix",
+            postfix_options,
+            index=postfix_index
+        )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
