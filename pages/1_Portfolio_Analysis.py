@@ -2232,19 +2232,32 @@ def render_data_source_section():
                             st.session_state.json_loaded_controls = controls.copy()
                             st.session_state.backup_controls = controls.copy()
 
-                            # Method 2: Force widget values with override flags
-                            st.session_state.force_curve_type = controls.get('curve_type', 'linear')
-                            st.session_state.force_alpha = controls.get('alpha', 2.0)
-                            st.session_state.force_beta = controls.get('beta', 2.0)
-                            st.session_state.force_currency_symbol = controls.get('currency_symbol', 'PKR')
-                            st.session_state.force_currency_postfix = controls.get('currency_postfix', '')
-                            st.session_state.force_inflation_rate = controls.get('inflation_rate', 12.0)
+                            # Method 2: FORCE widget session state keys directly (this is the key fix!)
+                            st.session_state['curve_type_select'] = 1 if controls.get('curve_type', 'linear').lower() == 's-curve' else 0
+                            st.session_state['s_alpha'] = controls.get('alpha', 2.0)
+                            st.session_state['s_beta'] = controls.get('beta', 2.0)
+                            st.session_state['currency_symbol'] = controls.get('currency_symbol', 'PKR')
+
+                            # Handle currency postfix dropdown index
+                            postfix_options = ["", "Thousand", "Million", "Billion"]
+                            try:
+                                postfix_index = postfix_options.index(controls.get('currency_postfix', ''))
+                                st.session_state['currency_postfix'] = postfix_index
+                            except ValueError:
+                                st.session_state['currency_postfix'] = 0
+
+                            st.session_state['controls_inflation'] = controls.get('inflation_rate', 12.0)
 
                             # Method 3: Set a flag that JSON was loaded
                             st.session_state.json_controls_active = True
 
                             st.success(f"✅ JSON settings loaded: {controls.get('curve_type', 'N/A')}, {controls.get('currency_symbol', 'N/A')} {controls.get('currency_postfix', 'N/A')}")
-                            st.info("🔄 **If settings don't appear below, try clicking any control to refresh**")
+                            st.info("✅ **Widget session state has been updated - settings should now appear correctly in Controls section below**")
+
+                            # Force a rerun to update the widgets with new session state values
+                            if not st.session_state.get('json_widgets_updated', False):
+                                st.session_state.json_widgets_updated = True
+                                st.rerun()
                     else:
                         st.warning("⚠️ No project data found in JSON file")
                         
@@ -2612,6 +2625,18 @@ def render_controls_section():
     }
 
     st.json(widget_diagnostic)
+
+    # Show what values the widgets will actually use
+    st.warning("📊 **Widget Values That Will Be Used:**")
+    actual_widget_values = {
+        'curve_type_index': st.session_state.get('curve_type_select', 'NOT_SET'),
+        'alpha_value': st.session_state.get('s_alpha', 'NOT_SET'),
+        'beta_value': st.session_state.get('s_beta', 'NOT_SET'),
+        'currency_symbol_value': st.session_state.get('currency_symbol', 'NOT_SET'),
+        'currency_postfix_index': st.session_state.get('currency_postfix', 'NOT_SET'),
+        'inflation_value': st.session_state.get('controls_inflation', 'NOT_SET')
+    }
+    st.json(actual_widget_values)
 
     # Curve settings
     curve_type = st.selectbox(
