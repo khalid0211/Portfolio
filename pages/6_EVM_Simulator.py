@@ -350,11 +350,11 @@ if pv >= 0 and ev >= 0 and ac >= 0 and bac > 0:
     # Calculate basic EVM metrics
     cv = ev - ac  # Cost Variance
     sv = ev - pv  # Schedule Variance
-    cpi = ev / ac if ac > 0 else 0  # Cost Performance Index
+    cpi = ev / ac if ac > 0 else float('nan')  # Cost Performance Index (N/A for AC=0)
     spi = ev / pv if pv > 0 else 0  # Schedule Performance Index
 
     # Calculate forecasting metrics
-    etc = (bac - ev) / cpi if cpi > 0 else 0  # Estimate to Complete
+    etc = (bac - ev) / cpi if ac > 0 and cpi > 0 else float('inf')  # Estimate to Complete
     eac = ac + etc  # Estimate at Completion
     vac = bac - eac  # Variance at Completion
     tcpi_bac = (bac - ev) / (bac - ac) if (bac - ac) != 0 else 0  # To Complete Performance Index

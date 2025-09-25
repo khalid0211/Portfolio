@@ -200,10 +200,19 @@ def load_model_config() -> Dict[str, str]:
 # ENHANCED UTILITIES
 # =============================================================================
 
-def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:
-    """Safely divide two numbers, avoiding division by zero."""
+def safe_divide(numerator: float, denominator: float, default: float = 0.0, return_na_for_zero_ac: bool = False) -> float:
+    """Safely divide two numbers, avoiding division by zero.
+
+    Args:
+        numerator: The numerator value
+        denominator: The denominator value
+        default: Default value to return on division errors
+        return_na_for_zero_ac: If True, returns 'N/A' for AC=0 cases in financial metrics
+    """
     try:
         if abs(denominator) < 1e-10:
+            if return_na_for_zero_ac and denominator == 0:
+                return float('nan')  # Will be displayed as 'N/A'
             return default
         result = numerator / denominator
         if math.isinf(result) or math.isnan(result):
@@ -211,6 +220,80 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
         return result
     except (ZeroDivisionError, TypeError, ValueError):
         return default
+
+def safe_calculate_forecast_duration(total_duration: float, spie: float, original_duration: float = None) -> float:
+    """Safely calculate forecast duration (LD) with constraint that LD <= 2.5 * OD.
+
+    Args:
+        total_duration: Total project duration
+        spie: Schedule Performance Index Estimate
+        original_duration: Original duration for constraint checking
+
+    Returns:
+        Constrained forecast duration or infinity if invalid
+    """
+    try:
+        if spie <= 1e-10:
+            return float("inf")
+
+        forecast_duration = safe_divide(total_duration, spie, float("inf"))
+
+        # Apply 2.5x OD constraint if original_duration is provided
+        if original_duration is not None and is_valid_finite_number(original_duration) and original_duration > 0:
+            max_allowed_ld = 2.5 * original_duration
+            if is_valid_finite_number(forecast_duration):
+                forecast_duration = min(forecast_duration, max_allowed_ld)
+
+        return forecast_duration
+    except (ValueError, TypeError):
+        return float("inf")
+
+def safe_financial_metrics(ev: float, ac: float, pv: float = None) -> dict:
+    """Safely calculate CPI, SPI, and related metrics, handling AC=0 cases.
+
+    Args:
+        ev: Earned Value
+        ac: Actual Cost
+        pv: Planned Value (optional, for SPI calculation)
+
+    Returns:
+        Dictionary with safely calculated metrics
+    """
+    metrics = {}
+
+    # CPI calculation - return NaN for AC=0 to display as 'N/A'
+    if ac == 0:
+        metrics['cpi'] = float('nan')
+    else:
+        metrics['cpi'] = safe_divide(ev, ac, 0.0)
+
+    # SPI calculation - only if PV is provided
+    if pv is not None:
+        metrics['spi'] = safe_divide(ev, pv, 0.0)
+
+    return metrics
+
+def format_financial_metric(value: float, decimals: int = 3, as_percentage: bool = False) -> str:
+    """Format financial metrics, displaying NaN as 'N/A' and handling AC=0 cases.
+
+    Args:
+        value: The numeric value to format
+        decimals: Number of decimal places
+        as_percentage: Whether to format as percentage
+
+    Returns:
+        Formatted string or 'N/A' for invalid values
+    """
+    try:
+        if pd.isna(value) or math.isnan(value):
+            return "N/A"
+        if math.isinf(value):
+            return "∞"
+        if as_percentage:
+            return f"{value * 100:.{decimals}f}%"
+        return f"{value:.{decimals}f}"
+    except (ValueError, TypeError):
+        return "N/A"
 
 def is_valid_finite_number(value: Any) -> bool:
     """Check if value is a valid finite number."""
@@ -879,10 +962,16 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value) -> Dict[str, fl
         cost_variance = earned_value - ac
         schedule_variance = earned_value - planned_value
         
-        cpi = safe_divide(earned_value, ac, 0.0)
-        spi = safe_divide(earned_value, planned_value, 0.0)
-        
-        eac = safe_divide(bac, cpi, float("inf")) if cpi > 1e-10 else float("inf")
+        # Use safe financial metrics to handle AC=0 cases
+        financial_metrics = safe_financial_metrics(earned_value, ac, planned_value)
+        cpi = financial_metrics['cpi']
+        spi = financial_metrics['spi']
+
+        # Handle EAC calculation for AC=0 cases
+        if pd.isna(cpi) or math.isnan(cpi):  # AC=0 case
+            eac = float("inf")
+        else:
+            eac = safe_divide(bac, cpi, float("inf")) if cpi > 1e-10 else float("inf")
         etc = eac - ac if is_valid_finite_number(eac) else float("inf")
         vac = bac - eac if is_valid_finite_number(eac) else float("-inf")
         
@@ -891,8 +980,8 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value) -> Dict[str, fl
             'earned_value': round(earned_value, 2),
             'cost_variance': round(cost_variance, 2),
             'schedule_variance': round(schedule_variance, 2),
-            'cost_performance_index': round(cpi, 3) if is_valid_finite_number(cpi) else 0.0,
-            'schedule_performance_index': round(spi, 3) if is_valid_finite_number(spi) else 0.0,
+            'cost_performance_index': round(cpi, 3) if is_valid_finite_number(cpi) and not (pd.isna(cpi) or math.isnan(cpi)) else cpi,
+            'schedule_performance_index': round(spi, 3) if is_valid_finite_number(spi) and not (pd.isna(spi) or math.isnan(spi)) else spi,
             'estimate_at_completion': round(eac, 2) if is_valid_finite_number(eac) else float("inf"),
             'estimate_to_complete': round(etc, 2) if is_valid_finite_number(etc) else float("inf"),
             'variance_at_completion': round(vac, 2) if is_valid_finite_number(vac) else float("-inf"),
@@ -979,7 +1068,7 @@ def add_months_approx(start_dt: datetime, months: int) -> datetime:
         logger.error(f"Error adding {months} months to {start_dt}: {e}")
         return start_dt
 
-def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_duration, plan_start) -> Dict[str, Union[float, int, str]]:
+def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_duration, plan_start, original_duration=None) -> Dict[str, Union[float, int, str]]:
     """Calculate earned schedule metrics with validation."""
     try:
         earned_schedule = validate_numeric_input(earned_schedule, "Earned Schedule", min_val=0.0)
@@ -988,7 +1077,7 @@ def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_du
         ps = parse_date_any(plan_start)
         
         spie = safe_divide(earned_schedule, actual_duration, 1.0)
-        forecast_duration = safe_divide(total_duration, spie, float("inf")) if spie > 1e-10 else float("inf")
+        forecast_duration = safe_calculate_forecast_duration(total_duration, spie, original_duration)
         
         if is_valid_finite_number(forecast_duration):
             forecast_duration_rounded = max(1, math.ceil(forecast_duration))
@@ -1039,7 +1128,7 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         else:
             earned_schedule = find_earned_schedule_linear(evm_metrics['earned_value'], bac, original_duration)
         
-        es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, plan_start)
+        es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, plan_start, original_duration)
         
         return {
             'bac': float(bac),
