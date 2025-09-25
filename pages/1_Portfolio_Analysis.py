@@ -2658,12 +2658,14 @@ def render_controls_section():
         st.error(f"Date parsing error: {e}")
         saved_date = date.today()
 
+    st.info(f"🔧 **DEBUG**: data_date from JSON='{saved_controls.get('data_date', 'N/A')}', parsed_date={saved_date}")
+
     data_date = st.date_input(
         "Data Date",
         value=saved_date,                     # use saved value or default
         min_value=date(2000, 1, 1),           # lower limit
-        max_value=date(2035, 12, 31),         # upper limit
-        key="controls_data_date"
+        max_value=date(2035, 12, 31)          # upper limit
+        # Removed key to prevent session state interference
     )
     
     
@@ -2683,13 +2685,13 @@ def render_controls_section():
     st.markdown("**Currency Settings**")
     col1, col2 = st.columns(2)
     with col1:
-        try:
-            currency_symbol = st.text_input("Currency Symbol",
-                                           value=saved_controls.get('currency_symbol', "PKR"),
-                                           max_chars=10, key="currency_symbol")
-        except Exception as e:
-            st.error(f"Error in currency_symbol text_input: {e}")
-            currency_symbol = "PKR"
+        currency_value = saved_controls.get('currency_symbol', "PKR")
+        st.info(f"🔧 **DEBUG**: currency_symbol from JSON='{currency_value}'")
+
+        currency_symbol = st.text_input("Currency Symbol",
+                                       value=currency_value,
+                                       max_chars=10)
+                                       # Removed key to prevent session state interference
     with col2:
         # Currency postfix - simple approach using saved_controls
         postfix_options = ["", "Thousand", "Million", "Billion"]
