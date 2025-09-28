@@ -241,7 +241,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">Project Delay Financial Impact Simulator</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">💸 Cash Flow Simulator</h1>', unsafe_allow_html=True)
+st.markdown("Model cash flow under different scenarios")
 
 # Professional parameters section with card-based layout
 st.markdown("""
@@ -716,13 +717,3 @@ if st.session_state.baseline_data is not None:
             with col3:
                 st.metric("Total Comparisons", len(st.session_state.comparison_records))
 
-st.markdown("""
-<div style="text-align: center; margin-top: 1rem; padding: 0.6rem; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-top: 2px solid #6c757d;">
-    <div style="color: #495057; font-size: 0.85rem; margin-bottom: 0.2rem;">
-        <strong>Project Cashflow Simulator v2.0</strong>
-    </div>
-    <div style="color: #6c757d; font-size: 0.75rem;">
-        Developed by <strong>Dr. Khalid Ahmad Khan</strong> • Engineering Management Solutions • August 2025
-    </div>
-</div>
-""", unsafe_allow_html=True)

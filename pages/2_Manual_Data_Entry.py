@@ -82,6 +82,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Custom CSS for professional appearance
+st.markdown("""
+<style>
+    .main-header {
+        text-align: center;
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # =============================================================================
 # SESSION STATE INITIALIZATION
 # =============================================================================
@@ -375,12 +390,8 @@ def main():
     initialize_session_state()
 
     # Header
-    st.title("📝 Manual Data Entry")
-    st.markdown("Professional interface for managing your project portfolio data")
-    st.markdown("""
-    **Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting**
-    Developed by Dr. Khalid Ahmad Khan – [LinkedIn](https://www.linkedin.com/in/khalidahmadkhan/)
-    """, unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">📝 Manual Data Entry</h1>', unsafe_allow_html=True)
+    st.markdown("Managing your project & portfolio data")
 
     # Check if data exists
     current_df = load_table(DEFAULT_DATASET_TABLE)

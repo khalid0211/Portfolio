@@ -188,7 +188,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">EVM Performance Analyzer</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">🎯 EVM Calculator</h1>', unsafe_allow_html=True)
+st.markdown("Earned Value Management calculations")
 
 # Professional Project Input Section
 st.markdown('<div class="section-header">Project Parameters</div>', unsafe_allow_html=True)

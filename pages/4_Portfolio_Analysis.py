@@ -28,58 +28,15 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    /* Main header with glassmorphism effect */
+    /* Main header simple style */
     .main-header {
-        background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 100%);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.3);
-        padding: 1.5rem 2rem;
-        border-radius: 15px;
-        color: #1a1a1a;
         text-align: center;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .main-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #f5576c);
-        background-size: 400% 400%;
-        opacity: 0.1;
-        animation: gradientShift 8s ease infinite;
-    }
-    
-    @keyframes gradientShift {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-    
-    .main-header h1 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 0.3rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        position: relative;
-        z-index: 2;
-    }
-
-    .main-header h3 {
-        font-size: 1.2rem;
-        font-weight: 400;
-        color: #4a5568;
-        position: relative;
-        z-index: 2;
-        margin-bottom: 0.3rem;
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
     }
     
     /* Executive metric cards */
@@ -492,16 +449,8 @@ def calculate_portfolio_metrics(df):
 
 def main():
     # Executive Header
-    st.title("📊 Portfolio Executive Dashboard")
-    st.markdown(
-        """
-        <div style='color:#003366; font-size:16px; line-height:1.4;'>
-            Strategic Portfolio Intelligence & Executive Decision Support<br>
-            Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<h1 class="main-header">📊 Portfolio Executive Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown("Portfolio Analytics and graphs")
     
     # Get currency settings from Portfolio Analysis if available
     # Try multiple sources in order of preference:
@@ -571,13 +520,6 @@ def main():
     
     if df is None:
         # Show helpful guidance when no data is available
-        st.markdown("""
-        <div class="main-header">
-            <h1>📊 Portfolio Analysis</h1>
-            <h3>Multi-Project Performance Dashboard</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
         st.markdown("## 🚀 Get Started")
         st.info("To view your portfolio analysis dashboard, you'll need to process your project data first.")
 

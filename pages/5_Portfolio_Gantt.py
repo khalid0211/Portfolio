@@ -24,6 +24,15 @@ st.markdown("""
         font-size: 0.9rem;
         margin-top: 3rem;
     }
+    .main-header {
+        text-align: center;
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
+    }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -611,21 +620,8 @@ def render_footer():
 
 
 def main():
-    st.title("📅 Project Portfolio Intelligence Suite")
-    st.markdown(
-        """
-        <div style='color:#003366; font-size:16px; line-height:1.4;'>
-            Smarter Projects and Portfolios with Earned Value Analysis
-            and AI-Powered Executive Reporting
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        "Developed by Dr. Khalid Ahmad Khan – "
-        "[LinkedIn](https://www.linkedin.com/in/khalidahmadkhan/)"
-    )
+    st.markdown('<h1 class="main-header">📈 Portfolio Gantt</h1>', unsafe_allow_html=True)
+    st.markdown("Timeline visualization for your portfolio")
 
     df = load_portfolio_dataframe()
     if df is None:

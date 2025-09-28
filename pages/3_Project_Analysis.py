@@ -79,7 +79,8 @@ st.markdown("""
         padding-top: 2rem;
     }
     .stSelectbox > div > div {
-        background-color: #f8f9fa;
+        background-color: #e9ecef;
+        border: 1px solid #ced4da;
     }
     .metric-card {
         background-color: #f8f9fa;
@@ -111,6 +112,42 @@ st.markdown("""
         margin-bottom: 0.5rem;
         padding-bottom: 0.2rem;
         border-bottom: 2px solid #007bff;
+    }
+    .main-header {
+        text-align: center;
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
+    }
+    /* Input field styling for better visibility */
+    .stNumberInput > div > div > input {
+        background-color: #e3f2fd !important;
+        color: #1a1a1a !important;
+        border: 1px solid #90caf9 !important;
+        font-weight: 500 !important;
+    }
+    .stTextInput > div > div > input {
+        background-color: #e3f2fd !important;
+        color: #1a1a1a !important;
+        border: 1px solid #90caf9 !important;
+        font-weight: 500 !important;
+    }
+    .stDateInput > div > div > input {
+        background-color: #e3f2fd !important;
+        color: #1a1a1a !important;
+        border: 1px solid #90caf9 !important;
+        font-weight: 500 !important;
+    }
+    /* Labels for input fields - make them black for clarity */
+    .stNumberInput > label,
+    .stTextInput > label,
+    .stDateInput > label,
+    .stSelectbox > label {
+        color: #1a1a1a !important;
+        font-weight: 500 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -3242,21 +3279,8 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
 
 def main():
     """Main application with enhanced UX."""
-    st.title("📊 Project Portfolio Intelligence Suite")
-    st.markdown(
-        """
-        <div style='color:#003366; font-size:16px; line-height:1.4;'>
-            Smarter Projects and Portfolios with Earned Value Analysis 
-            and AI-Powered Executive Reporting
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        "Developed by Dr. Khalid Ahmad Khan – "
-        "[LinkedIn](https://www.linkedin.com/in/khalidahmadkhan/)"
-    )
+    st.markdown('<h1 class="main-header">🎯 Single Project Analysis</h1>', unsafe_allow_html=True)
+    st.markdown("Detailed analysis of individual projects")
     
     
     try:
@@ -3340,7 +3364,7 @@ def main():
         if not session_has_data:
             st.info("🚀 **Ready to start!** Use **File Management** to import data and configure settings, then return here for single project analysis.")
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.markdown("""
                 ### 🎯 Quick Start Workflow
@@ -3351,7 +3375,7 @@ def main():
 
                 if st.button("📁 **Go to File Management**", key="go_to_file_mgmt", type="primary"):
                     st.switch_page("pages/1_File_Management.py")
-            
+
             with col2:
                 st.markdown("""
                 ### ✏️ Manual Entry
@@ -3360,7 +3384,7 @@ def main():
                 - Delete projects
                 - No files required!
                 """)
-            
+
             with col3:
                 st.markdown("""
                 ### 🔧 Controls & Help
@@ -3373,12 +3397,6 @@ def main():
         
         # Use session state data for display
         display_df = st.session_state.data_df
-        
-        st.markdown("### 🎯 Single Project Analysis")
-        
-        with st.expander("📊 Data Preview", expanded=False):
-            st.dataframe(display_df.head(20), width="stretch")
-            st.caption(f"Showing first 20 of {len(display_df)} total projects.")
         
 
         # Single project analysis mode

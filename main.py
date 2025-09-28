@@ -49,11 +49,11 @@ st.markdown("""
 # Main header
 st.markdown("""
 <div class="main-header">
-    <h1>📊 Portfolio Management Suite</h1>
-    <h3>Project Portfolio Analysis & Executive Dashboard System</h3>
+    <h1>📊 Portfolio Analysis Suite</h1>
+    <h3>Project Portfolio Analysis & Executive Dashboard</h3>
     <p style="margin-top: 1rem; font-size: 1.1em; color: #666; font-style: italic;">
         Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting<br>
-        <strong>Version 1.0 • Released September 23, 2025</strong><br>
+        <strong>Beta Version 0.9 • Released September 30, 2025</strong><br>
         Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
     </p>
 </div>

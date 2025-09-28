@@ -27,27 +27,26 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 100%);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.3);
-        padding: 2rem;
-        border-radius: 20px;
         text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        color: #2c3e50;
+        font-size: 2.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 0.5rem;
     }
     .file-section {
         background: rgba(255, 255, 255, 0.1);
-        padding: 1.5rem;
+        padding: 1rem;
         border-radius: 15px;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
     .section-header {
         font-size: 1.2em;
         font-weight: 600;
         color: #4A90E2;
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
         padding-bottom: 0.5rem;
         border-bottom: 2px solid #4A90E2;
     }
@@ -128,6 +127,175 @@ def render_data_source_section():
             help=help_text,
             label_visibility="visible"
         )
+
+    # CSV Column Mapping Interface (always visible when CSV is selected)
+    if data_source == "Load CSV":
+        st.markdown("### 🔗 Column Mapping")
+        st.info("Map your CSV columns to the required EVM fields below:")
+
+        # Get available columns from uploaded file or session state
+        csv_columns = ['']  # Empty option first
+        if uploaded_file is not None:
+            try:
+                # Try different parsing options for problematic CSV files
+                temp_df = None
+
+                # Try standard parsing first
+                try:
+                    uploaded_file.seek(0)  # Reset file pointer to beginning
+                    temp_df = pd.read_csv(uploaded_file)
+                except pd.errors.EmptyDataError:
+                    st.error("❌ CSV file appears to be empty or has no columns")
+                    return None, None, {}
+                except Exception as e:
+                    # Try with different encoding
+                    try:
+                        uploaded_file.seek(0)  # Reset file pointer
+                        temp_df = pd.read_csv(uploaded_file, encoding='latin-1')
+                    except Exception as e2:
+                        # Try with different separator
+                        try:
+                            uploaded_file.seek(0)  # Reset file pointer
+                            temp_df = pd.read_csv(uploaded_file, sep=';')
+                        except Exception as e3:
+                            st.error(f"❌ Could not parse CSV file. Error: {str(e)}")
+                            st.info("💡 Try saving your file as UTF-8 encoded CSV with comma separators")
+                            return None, None, {}
+
+                if temp_df is not None and not temp_df.empty:
+                    csv_columns.extend(list(temp_df.columns))
+                else:
+                    st.warning("⚠️ CSV file contains no data")
+                    return None, None, {}
+
+            except Exception as e:
+                st.error(f"❌ Error reading CSV file: {str(e)}")
+                return None, None, {}
+        elif st.session_state.get('raw_csv_df') is not None:
+            csv_columns.extend(list(st.session_state.raw_csv_df.columns))
+
+        if len(csv_columns) > 1:  # More than just empty option
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Required Fields:**")
+                pid_col = st.selectbox("Project ID", csv_columns, key="csv_pid_col")
+                pname_col = st.selectbox("Project Name", csv_columns, key="csv_pname_col")
+                org_col = st.selectbox("Organization", csv_columns, key="csv_org_col")
+                pm_col = st.selectbox("Project Manager", csv_columns, key="csv_pm_col")
+
+            with col2:
+                st.markdown("**Date & Financial Fields:**")
+                st_col = st.selectbox("Plan Start Date", csv_columns, key="csv_st_col")
+                fn_col = st.selectbox("Plan Finish Date", csv_columns, key="csv_fn_col")
+                bac_col = st.selectbox("BAC (Budget at Completion)", csv_columns, key="csv_bac_col")
+                ac_col = st.selectbox("AC (Actual Cost)", csv_columns, key="csv_ac_col")
+                pv_col = st.selectbox("Plan Value (Optional)", csv_columns, key="csv_pv_col")
+                ev_col = st.selectbox("Earned Value (Optional)", csv_columns, key="csv_ev_col")
+
+            # Build column mapping
+            if pid_col: column_mapping['pid_col'] = pid_col
+            if pname_col: column_mapping['pname_col'] = pname_col
+            if org_col: column_mapping['org_col'] = org_col
+            if pm_col: column_mapping['pm_col'] = pm_col
+            if st_col: column_mapping['st_col'] = st_col
+            if fn_col: column_mapping['fn_col'] = fn_col
+            if bac_col: column_mapping['bac_col'] = bac_col
+            if ac_col: column_mapping['ac_col'] = ac_col
+            if pv_col: column_mapping['pv_col'] = pv_col
+            if ev_col: column_mapping['ev_col'] = ev_col
+
+            # Validation
+            required_fields = ['pid_col', 'pname_col', 'org_col', 'pm_col', 'st_col', 'fn_col', 'bac_col', 'ac_col']
+            missing_fields = [field for field in required_fields if field not in column_mapping]
+
+            if missing_fields:
+                st.warning(f"⚠️ Please map all required fields. Missing: {', '.join(missing_fields)}")
+            else:
+                st.success("✅ All required fields mapped successfully!")
+
+                # Load Data button
+                if st.button("📊 Load Data with Mapping", type="primary", key="load_csv_with_mapping"):
+                    if uploaded_file is not None or st.session_state.get('raw_csv_df') is not None:
+                        try:
+                            # Use uploaded file or session state data
+                            if uploaded_file is not None:
+                                # Try robust parsing again
+                                df = None
+                                try:
+                                    uploaded_file.seek(0)  # Reset file pointer to beginning
+                                    df = pd.read_csv(uploaded_file)
+                                except pd.errors.EmptyDataError:
+                                    st.error("❌ CSV file appears to be empty or has no columns")
+                                    st.stop()
+                                except Exception as e:
+                                    # Try with different encoding
+                                    try:
+                                        uploaded_file.seek(0)
+                                        df = pd.read_csv(uploaded_file, encoding='latin-1')
+                                    except Exception as e2:
+                                        # Try with different separator
+                                        try:
+                                            uploaded_file.seek(0)
+                                            df = pd.read_csv(uploaded_file, sep=';')
+                                        except Exception as e3:
+                                            st.error(f"❌ Could not parse CSV file. Error: {str(e)}")
+                                            st.stop()
+                            else:
+                                df = st.session_state.raw_csv_df.copy()
+
+                            if df is not None and not df.empty:
+                                # Apply column mapping to create standardized dataframe
+                                mapped_df = df.copy()
+
+                                # Create reverse mapping to rename columns to standard names
+                                column_rename_map = {}
+                                standard_names = {
+                                    'pid_col': 'Project ID',
+                                    'pname_col': 'Project',
+                                    'org_col': 'Organization',
+                                    'pm_col': 'Project Manager',
+                                    'st_col': 'Plan Start',
+                                    'fn_col': 'Plan Finish',
+                                    'bac_col': 'BAC',
+                                    'ac_col': 'AC',
+                                    'pv_col': 'PV',
+                                    'ev_col': 'EV'
+                                }
+
+                                # Build rename mapping from selected columns to standard names
+                                for field_key, csv_column in column_mapping.items():
+                                    if field_key in standard_names:
+                                        column_rename_map[csv_column] = standard_names[field_key]
+
+                                # Rename columns to standard names
+                                mapped_df = mapped_df.rename(columns=column_rename_map)
+
+                                # Store the loaded data
+                                st.session_state.data_df = mapped_df
+                                if uploaded_file:
+                                    st.session_state.original_filename = uploaded_file.name
+                                st.session_state.file_type = "csv"
+
+                                st.success(f"✅ CSV data loaded successfully: {len(mapped_df)} projects")
+
+                                # Preview mapped data
+                                with st.expander("🔍 Preview Mapped Data"):
+                                    preview_df = mapped_df.head(3)
+                                    mapped_preview = {}
+                                    for field, col in column_mapping.items():
+                                        if col in preview_df.columns:
+                                            mapped_preview[field] = preview_df[col].tolist()
+                                    st.json(mapped_preview)
+                            else:
+                                st.error("❌ CSV file contains no data")
+
+                        except Exception as e:
+                            st.error(f"❌ Error loading CSV data: {str(e)}")
+                    else:
+                        st.error("No CSV file available. Please upload a file first.")
+        else:
+            st.info("📁 Upload a CSV file above to see available columns for mapping")
 
     # Process uploaded file based on selection
     if uploaded_file is not None:
@@ -212,16 +380,51 @@ def render_data_source_section():
                     st.session_state.file_type = "json"
 
                 elif data_source == "Load CSV":
-                    # Process CSV file
-                    df = pd.read_csv(uploaded_file)
-                    st.session_state.raw_csv_df = df.copy()
-                    st.session_state.file_type = "csv"
-                    st.success(f"✅ CSV file loaded: {len(df)} rows")
+                    # Store raw CSV file for mapping interface with error handling
+                    try:
+                        # Try different parsing options for problematic CSV files
+                        df = None
 
-                # Store processed data
-                st.session_state.data_df = df
-                st.session_state.original_filename = uploaded_file.name
-                st.session_state.processed_file_info = current_file_info
+                        # Try standard parsing first
+                        try:
+                            uploaded_file.seek(0)  # Reset file pointer to beginning
+                            df = pd.read_csv(uploaded_file)
+                        except pd.errors.EmptyDataError:
+                            st.error("❌ CSV file appears to be empty or has no columns")
+                            return
+                        except Exception as e:
+                            # Try with different encoding
+                            try:
+                                uploaded_file.seek(0)  # Reset file pointer
+                                df = pd.read_csv(uploaded_file, encoding='latin-1')
+                                st.info("ℹ️ File loaded with Latin-1 encoding")
+                            except Exception as e2:
+                                # Try with different separator
+                                try:
+                                    uploaded_file.seek(0)  # Reset file pointer
+                                    df = pd.read_csv(uploaded_file, sep=';')
+                                    st.info("ℹ️ File loaded with semicolon separator")
+                                except Exception as e3:
+                                    st.error(f"❌ Could not parse CSV file. Error: {str(e)}")
+                                    st.info("💡 Try saving your file as UTF-8 encoded CSV with comma separators")
+                                    return
+
+                        if df is not None and not df.empty:
+                            st.session_state.raw_csv_df = df.copy()
+                            st.session_state.processed_file_info = current_file_info
+                            st.info(f"📁 CSV file uploaded: {len(df)} rows, {len(df.columns)} columns. Configure mapping below and click 'Load Data with Mapping'.")
+                        else:
+                            st.error("❌ CSV file contains no data")
+
+                    except Exception as e:
+                        st.error(f"❌ Error processing CSV file: {str(e)}")
+                        logging.error(f"CSV processing error: {e}")
+
+                # Store processed data (only for JSON, not CSV)
+                if data_source != "Load CSV":
+                    st.session_state.data_df = df
+                    st.session_state.original_filename = uploaded_file.name
+                    st.session_state.processed_file_info = current_file_info
 
                 # Force rerun to update UI with new config values
                 if data_source == "Load JSON" and config_loaded:
@@ -305,7 +508,9 @@ def render_controls_section():
         data_date = st.date_input(
             "Data Date",
             value=pd.to_datetime(saved_controls.get('data_date', '2024-01-01')).date(),
-            key="data_date_input"
+            min_value=datetime(1990, 1, 1).date(),
+            key="data_date_input",
+            help="Project data date for EVM calculations (minimum: 1990-01-01)"
         )
 
     # Inflation rate
@@ -347,113 +552,95 @@ def render_batch_calculation_section():
     has_data = (st.session_state.data_df is not None and not st.session_state.data_df.empty)
 
     if has_data:
-        st.markdown("### 🚀 Batch EVM Calculations")
-        col1, col2 = st.columns([2, 1])
+        st.markdown(f"**Ready to process {len(st.session_state.data_df)} projects**")
+        st.markdown("All configuration settings will be applied to the batch calculation")
 
-        with col1:
-            st.markdown(f"**Ready to process {len(st.session_state.data_df)} projects**")
-            st.caption("All configuration settings will be applied to the batch calculation")
+        if st.button("🚀 **Run Batch EVM**", type="primary", key="run_batch"):
+            # Run batch processing
+            try:
+                st.info("🔄 Starting batch EVM calculations...")
 
-        with col2:
-            if st.button("🚀 **Run Batch EVM**", type="primary", key="run_batch"):
-                # Run batch processing
-                try:
-                    st.info("🔄 Starting batch EVM calculations...")
+                # Get controls from session state
+                controls = st.session_state.config_dict.get('controls', {})
 
-                    # Get controls from session state
-                    controls = st.session_state.config_dict.get('controls', {})
+                # Set up column mapping based on file type
+                if st.session_state.get('file_type') in ['demo', 'csv', 'json']:
+                    column_mapping = {
+                        'pid_col': 'Project ID',
+                        'pname_col': 'Project',
+                        'org_col': 'Organization',
+                        'pm_col': 'Project Manager',
+                        'bac_col': 'BAC',
+                        'ac_col': 'AC',
+                        'st_col': 'Plan Start',
+                        'fn_col': 'Plan Finish',
+                        'cp_col': 'Completion %'
+                    }
+                else:
+                    # For other file types, you might need column mapping UI
+                    st.error("Column mapping not implemented for this file type yet")
+                    return
 
-                    # Set up column mapping based on file type
-                    if st.session_state.get('file_type') in ['demo', 'csv', 'json']:
-                        column_mapping = {
-                            'pid_col': 'Project ID',
-                            'pname_col': 'Project',
-                            'org_col': 'Organization',
-                            'pm_col': 'Project Manager',
-                            'bac_col': 'BAC',
-                            'ac_col': 'AC',
-                            'st_col': 'Plan Start',
-                            'fn_col': 'Plan Finish',
-                            'cp_col': 'Completion %'
-                        }
-                    else:
-                        # For other file types, you might need column mapping UI
-                        st.error("Column mapping not implemented for this file type yet")
-                        return
+                # Extract parameters
+                curve_type = controls.get('curve_type', 'linear')
+                alpha = float(controls.get('alpha', 2.0))
+                beta = float(controls.get('beta', 2.0))
+                data_date = pd.to_datetime(controls.get('data_date', '2024-01-01')).date()
+                inflation_rate = float(controls.get('inflation_rate', 0.0))
 
-                    # Extract parameters
-                    curve_type = controls.get('curve_type', 'linear')
-                    alpha = float(controls.get('alpha', 2.0))
-                    beta = float(controls.get('beta', 2.0))
-                    data_date = pd.to_datetime(controls.get('data_date', '2024-01-01')).date()
-                    inflation_rate = float(controls.get('inflation_rate', 0.0))
+                # Actually run the REAL batch calculation using the same function as Project Analysis
+                with st.spinner("⚡ Running comprehensive EVM batch calculations..."):
 
-                    # Actually run the REAL batch calculation using the same function as Project Analysis
-                    with st.spinner("⚡ Running comprehensive EVM batch calculations..."):
+                    # Call the real batch calculation function
+                    # We'll handle the import dynamically to avoid circular imports
+                    import sys
+                    import os
+                    sys.path.append(os.path.dirname(__file__))
 
-                        # Call the real batch calculation function
-                        # We'll handle the import dynamically to avoid circular imports
-                        import sys
-                        import os
-                        sys.path.append(os.path.dirname(__file__))
+                    try:
+                        # Import and run the real batch calculation
+                        from pathlib import Path
+                        import importlib.util
 
-                        try:
-                            # Import and run the real batch calculation
-                            from pathlib import Path
-                            import importlib.util
+                        # Load the Project Analysis module dynamically
+                        project_analysis_path = Path(__file__).parent / "3_Project_Analysis.py"
+                        spec = importlib.util.spec_from_file_location("project_analysis", project_analysis_path)
+                        project_analysis = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(project_analysis)
 
-                            # Load the Project Analysis module dynamically
-                            project_analysis_path = Path(__file__).parent / "3_Project_Analysis.py"
-                            spec = importlib.util.spec_from_file_location("project_analysis", project_analysis_path)
-                            project_analysis = importlib.util.module_from_spec(spec)
-                            spec.loader.exec_module(project_analysis)
+                        # Use the real perform_batch_calculation function
+                        batch_results = project_analysis.perform_batch_calculation(
+                            st.session_state.data_df, column_mapping,
+                            curve_type, alpha, beta, data_date, inflation_rate
+                        )
 
-                            # Use the real perform_batch_calculation function
-                            batch_results = project_analysis.perform_batch_calculation(
-                                st.session_state.data_df, column_mapping,
-                                curve_type, alpha, beta, data_date, inflation_rate
-                            )
+                        st.success(f"✅ Real EVM calculations completed for {len(batch_results)} projects!")
 
-                            st.success(f"✅ Real EVM calculations completed for {len(batch_results)} projects!")
+                    except Exception as import_error:
+                        st.warning(f"⚠️ Could not import real batch calculation: {import_error}")
+                        st.info("Using simplified calculation as fallback...")
 
-                        except Exception as import_error:
-                            st.warning(f"⚠️ Could not import real batch calculation: {import_error}")
-                            st.info("Using simplified calculation as fallback...")
+                        # Fallback to simplified calculation if import fails
+                        batch_results = st.session_state.data_df.copy()
 
-                            # Fallback to simplified calculation if import fails
-                            batch_results = st.session_state.data_df.copy()
+                        # Add basic calculated columns
+                        if 'cost_performance_index' not in batch_results.columns:
+                            batch_results['cost_performance_index'] = 1.0
+                        if 'schedule_performance_index' not in batch_results.columns:
+                            batch_results['schedule_performance_index'] = 1.0
+                        if 'spie' not in batch_results.columns:
+                            batch_results['spie'] = 1.0
 
-                            # Add basic calculated columns
-                            if 'cost_performance_index' not in batch_results.columns:
-                                batch_results['cost_performance_index'] = 1.0
-                            if 'schedule_performance_index' not in batch_results.columns:
-                                batch_results['schedule_performance_index'] = 1.0
-                            if 'spie' not in batch_results.columns:
-                                batch_results['spie'] = 1.0
+                # Store the batch results in session state
+                st.session_state.batch_results = batch_results
+                st.session_state['batch_column_mapping'] = column_mapping
+                st.session_state['batch_results_ready'] = True
 
-                    # Store the batch results in session state
-                    st.session_state.batch_results = batch_results
-                    st.session_state['batch_column_mapping'] = column_mapping
-                    st.session_state['batch_results_ready'] = True
+                # These messages will appear in the Status section
 
-                    st.success("✅ Batch calculations completed!")
-                    st.info("📊 You can now access Project Analysis, Portfolio Analysis, or Portfolio Gantt")
-
-                    # Show navigation options
-                    col_nav1, col_nav2, col_nav3 = st.columns(3)
-                    with col_nav1:
-                        if st.button("🔍 Project Analysis", key="goto_project"):
-                            st.switch_page("pages/3_Project_Analysis.py")
-                    with col_nav2:
-                        if st.button("📊 Portfolio Analysis", key="goto_portfolio"):
-                            st.switch_page("pages/4_Portfolio_Analysis.py")
-                    with col_nav3:
-                        if st.button("📈 Portfolio Gantt", key="goto_gantt"):
-                            st.switch_page("pages/5_Portfolio_Gantt.py")
-
-                except Exception as e:
-                    st.error(f"❌ Error running batch calculation: {str(e)}")
-                    logging.error(f"Batch calculation error: {e}")
+            except Exception as e:
+                st.error(f"❌ Error running batch calculation: {str(e)}")
+                logging.error(f"Batch calculation error: {e}")
     else:
         st.warning("⚠️ No data loaded. Load data first to enable batch processing.")
         st.info("💡 Upload JSON/CSV data or initialize manual entry in Section A")
@@ -508,23 +695,15 @@ def render_save_download_section():
     # Check session state data
     if st.session_state.data_df is not None and not st.session_state.data_df.empty:
         has_data = True
-        data_sources.append(f"Session Data ({len(st.session_state.data_df)} rows)")
 
     # Check batch results
     if st.session_state.batch_results is not None and not st.session_state.batch_results.empty:
         has_data = True
-        data_sources.append(f"Batch Results ({len(st.session_state.batch_results)} projects)")
 
     # Check config data
     config_items = len(st.session_state.config_dict) if st.session_state.config_dict else 0
-    if config_items > 0:
-        data_sources.append(f"Configuration ({config_items} settings)")
 
     if has_data or config_items > 0:
-        # Show what will be saved
-        st.markdown("**Available for Export:**")
-        for source in data_sources:
-            st.markdown(f"• {source}")
 
         # Export options
         col1, col2 = st.columns(2)
@@ -566,26 +745,8 @@ def render_save_download_section():
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Main header
-st.markdown("""
-<div class="main-header">
-    <h1>📁 File Management & Configuration</h1>
-    <h3>Centralized Data Import, Configuration & Export Hub</h3>
-    <p style="margin-top: 1rem; font-size: 1.1em; color: #666;">
-        Configure your data sources, calculation parameters, and export settings
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# Navigation buttons
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    if st.button("🔙 Return to Main Navigation", key="return_main", type="secondary"):
-        st.switch_page("main.py")
-
-    if st.button("🚀 Continue to Project Analysis", key="continue_project", type="primary"):
-        st.switch_page("pages/3_Project_Analysis.py")
-
-st.markdown("---")
+st.markdown('<h1 class="main-header">📁 File Management</h1>', unsafe_allow_html=True)
+st.markdown("Centralized Data Import, Configuration & Export Hub")
 
 # Render all sections
 df, selected_table, column_mapping = render_data_source_section()
