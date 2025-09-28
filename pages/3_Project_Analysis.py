@@ -1,4 +1,4 @@
-# Portfolio_5.py — Enhanced EVM Project Management Suite with targeted fixes
+# Project Analysis — Single Project EVM Analysis and Management
 # Requirements:
 #   pip install streamlit pandas matplotlib python-dateutil requests
 #
@@ -40,7 +40,7 @@ from dateutil import parser as date_parser
 # =============================================================================
 
 # Application constants
-APP_TITLE = "Project Portfolio Intelligence Suite 📊"
+APP_TITLE = "Project Analysis - EVM Intelligence Suite 📊"
 DEFAULT_DATASET_TABLE = "dataset"
 RESULTS_TABLE = "evm_results"
 CONFIG_TABLE = "app_config"
@@ -1282,7 +1282,7 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev=None,
         ac = validate_numeric_input(ac, "AC", min_val=0.0)
         present_value = validate_numeric_input(present_value, "Present Value", min_val=0.0)
         planned_value = validate_numeric_input(planned_value, "Planned Value", min_val=0.0)
-        
+
         # Use manual EV if specified, otherwise calculate automatically
         if use_manual_ev and manual_ev is not None and is_valid_finite_number(manual_ev):
             earned_value = float(manual_ev)
@@ -1292,12 +1292,12 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev=None,
             earned_value = bac * percent_complete
         cost_variance = earned_value - ac
         schedule_variance = earned_value - planned_value
-        
+
         # Use safe financial metrics to handle AC=0 cases
         financial_metrics = safe_financial_metrics(earned_value, ac, planned_value)
         cpi = financial_metrics['cpi']
         spi = financial_metrics['spi']
-        
+
         # Handle EAC calculation for AC=0 cases
         if pd.isna(cpi) or math.isnan(cpi):  # AC=0 case
             eac = float("inf")
@@ -2540,7 +2540,7 @@ def render_manual_entry_link():
                 type="primary",
                 width='stretch',
                 key="open_manual_entry"):
-        st.switch_page("pages/Manual_Data_Entry.py")
+        st.switch_page("pages/2_Manual_Data_Entry.py")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -3275,17 +3275,61 @@ def main():
         # Sidebar configuration
         with st.sidebar:
             st.markdown("## ⚙️ Configuration")
-            
-            # Render all sidebar sections in desired order
-            df, selected_table, column_mapping = render_data_source_section()
-            controls = render_controls_section()
 
-            # Store controls in config_dict for JSON export
-            st.session_state.config_dict['controls'] = controls
-            enable_batch = render_batch_calculation_section()
-            render_manual_entry_link()
-            llm_config = render_llm_provider_section()
-            render_save_download_section()
+            # Navigation to File Management
+            st.markdown("### 📁 File & Configuration")
+            if st.button("🔧 Open File Management", key="open_file_mgmt", type="primary"):
+                st.switch_page("pages/1_File_Management.py")
+
+            st.markdown("---")
+
+            # Load configuration from session state (set in File Management)
+            controls = st.session_state.config_dict.get('controls', {
+                'curve_type': 'linear',
+                'alpha': 2.0,
+                'beta': 2.0,
+                'currency_symbol': '$',
+                'currency_postfix': '',
+                'date_format': 'YYYY-MM-DD'
+            })
+
+            # Default column mapping for single project analysis
+            column_mapping = {
+                'pid_col': 'Project ID',
+                'pname_col': 'Project',
+                'org_col': 'Organization',
+                'pm_col': 'Project Manager',
+                'bac_col': 'BAC',
+                'ac_col': 'AC',
+                'st_col': 'Plan Start',
+                'fn_col': 'Plan Finish',
+                'cp_col': 'Completion %'
+            }
+
+            # Show current configuration status
+            st.markdown("### 📊 Current Configuration")
+
+            # Data status
+            if st.session_state.data_df is not None and not st.session_state.data_df.empty:
+                st.success(f"✅ {len(st.session_state.data_df)} projects loaded")
+            else:
+                st.warning("⚠️ No data loaded")
+
+            # Configuration status
+            if st.session_state.config_dict.get('controls'):
+                st.success(f"✅ {controls.get('curve_type', 'linear')} curve, {controls.get('currency_symbol', '$')} currency")
+            else:
+                st.info("💡 Using default settings")
+
+            # Analysis mode
+            st.info("🔍 Single project analysis mode")
+
+            # Check if batch results are available
+            if st.session_state.get('batch_results_ready'):
+                st.success("✅ Batch calculations completed")
+                st.info("💡 Visit Portfolio Analysis for portfolio-level insights")
+
+            # Only render Help section
             render_help_section()
         
         
@@ -3294,16 +3338,19 @@ def main():
                            not st.session_state.data_df.empty)
         
         if not session_has_data:
-            st.info("🚀 **Ready to start!** Session initialized automatically. Use **'Manual Entry'** in the sidebar to add your first project, or **'Load JSON/CSV'** to import data.")
-            
-            col1, col2, col3 = st.columns(3)
+            st.info("🚀 **Ready to start!** Use **File Management** to import data and configure settings, then return here for single project analysis.")
+
+            col1, col2 = st.columns(2)
             with col1:
                 st.markdown("""
-                ### 🎯 Quick Start
-                1. **Add Project**: Use Manual Entry → Add New Project
-                2. **Load Data**: Use JSON or CSV Import in sidebar
-                3. **Analyze**: Select project for EVM analysis
+                ### 🎯 Quick Start Workflow
+                1. **File Management**: Import data & configure settings
+                2. **Project Analysis**: Individual project EVM analysis
+                3. **Portfolio Analysis**: Multi-project strategic view
                 """)
+
+                if st.button("📁 **Go to File Management**", key="go_to_file_mgmt", type="primary"):
+                    st.switch_page("pages/1_File_Management.py")
             
             with col2:
                 st.markdown("""
@@ -3333,324 +3380,13 @@ def main():
             st.dataframe(display_df.head(20), width="stretch")
             st.caption(f"Showing first 20 of {len(display_df)} total projects.")
         
-        
-        # Batch calculation mode
-        if enable_batch:
-            st.markdown("### 🔄 Batch Calculation Mode")
-            
-            if st.button("🚀 Run Batch EVM Calculation", type="primary"):
-                # For demo data or processed CSV data, use standard column mapping since it's already in correct format
-                if st.session_state.get('file_type') in ['demo', 'csv']:
-                    column_mapping = {
-                        'pid_col': 'Project ID',
-                        'pname_col': 'Project',
-                        'org_col': 'Organization',
-                        'pm_col': 'Project Manager',
-                        'bac_col': 'BAC',
-                        'ac_col': 'AC',
-                        'st_col': 'Plan Start',
-                        'fn_col': 'Plan Finish'
-                    }
 
-                # Validate required column mappings exist
-                required_keys = ['pid_col', 'bac_col', 'ac_col', 'st_col', 'fn_col']
-                missing_mappings = []
+        # Single project analysis mode
 
-                for key in required_keys:
-                    if not column_mapping.get(key):
-                        missing_mappings.append(key.replace('_col', '').upper())
-                    elif column_mapping[key] not in display_df.columns:
-                        missing_mappings.append(f"{key.replace('_col', '').upper()} (column '{column_mapping[key]}' not found)")
-
-                if missing_mappings:
-                    st.error(f"Missing required column mappings: {', '.join(missing_mappings)}")
-                else:
-                    with st.spinner("Processing batch calculations..."):
-                        try:
-                            batch_results = perform_batch_calculation(
-                                display_df, column_mapping, 
-                                controls['curve_type'], controls['alpha'], controls['beta'],
-                                controls['data_date'], controls['inflation_rate']
-                            )
-                            
-                            st.session_state.batch_results = batch_results
-                            save_table_replace(batch_results, f"{RESULTS_TABLE}_batch")
-                            st.success(f"✅ Batch calculation completed! Processed {len(batch_results)} projects.")
-                            
-                        except Exception as e:
-                            st.error(f"Batch calculation failed: {e}")
-            
-            # Display batch results
-            if st.session_state.batch_results is not None:
-                st.markdown("### 📋 Batch Results")
-                
-                batch_df = st.session_state.batch_results
-                
-                if 'error' in batch_df.columns:
-                    error_mask = batch_df['error'].notna()
-                    valid_count = len(batch_df[~error_mask])
-                else:
-                    valid_count = len(batch_df)
-                
-                portfolio_summary = calculate_portfolio_summary(batch_df)
-                if "error" not in portfolio_summary:
-                    portfolio_cpi = portfolio_summary.get('portfolio_cpi', 0)
-                    portfolio_spi = portfolio_summary.get('portfolio_spi', 0)
-                else:
-                    portfolio_cpi, portfolio_spi = 0, 0
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Projects", len(batch_df))
-                with col2:
-                    st.metric("Valid Results", valid_count)
-                with col3:
-                    cpi_status = "🟢" if portfolio_cpi >= 1.0 else "🟡" if portfolio_cpi >= 0.9 else "🔴"
-                    st.metric("Portfolio CPI", f"{cpi_status} {format_performance_index(portfolio_cpi)}" if portfolio_cpi else "N/A",
-                             f"{portfolio_cpi - 1:.2f}" if portfolio_cpi else None)
-                with col4:
-                    spi_status = "🟢" if portfolio_spi >= 1.0 else "🟡" if portfolio_spi >= 0.9 else "🔴"
-                    st.metric("Portfolio SPI", f"{spi_status} {format_performance_index(portfolio_spi)}" if portfolio_spi else "N/A",
-                             f"{portfolio_spi - 1:.2f}" if portfolio_spi else None)
-                
-                if valid_count > 0 and "error" not in portfolio_summary:
-                    st.markdown("### 📊 Portfolio Performance Analysis")
-                    
-                    st.markdown("#### 💰 Portfolio Financial Summary")
-
-                    # Enhanced styling for Portfolio Financial Summary with larger fonts and better spacing
-                    st.markdown("""
-                    <style>
-                    .portfolio-financial-metric {
-                        font-size: 1.1rem;
-                        line-height: 1.4;
-                        margin-bottom: 15px;
-                        padding: 10px;
-                        border-radius: 8px;
-                        background-color: #f8f9fa;
-                        border-left: 4px solid #007bff;
-                    }
-                    .portfolio-financial-value {
-                        font-size: 1.3rem;
-                        font-weight: bold;
-                        color: #1f77b4;
-                        margin-top: 8px;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-
-                    # Row 1: Budget (BAC) and Actual Cost (AC)
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        bac_formatted = format_currency(portfolio_summary['total_bac'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💰 **Portfolio Budget (BAC)**<br><span class="portfolio-financial-value">{bac_formatted}</span></div>', unsafe_allow_html=True)
-                    with col2:
-                        ac_formatted = format_currency(portfolio_summary['total_ac'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💸 **Portfolio Actual Cost (AC)**<br><span class="portfolio-financial-value">{ac_formatted}</span></div>', unsafe_allow_html=True)
-
-                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
-
-                    # Row 2: Planned Value (PV) and Earned Value (EV)
-                    col3, col4 = st.columns(2)
-                    with col3:
-                        pv_formatted = format_currency(portfolio_summary['total_pv'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">📊 **Portfolio Planned Value (PV)**<br><span class="portfolio-financial-value">{pv_formatted}</span></div>', unsafe_allow_html=True)
-                    with col4:
-                        ev_formatted = format_currency(portfolio_summary['total_ev'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">💎 **Portfolio Earned Value (EV)**<br><span class="portfolio-financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
-
-                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
-
-                    # Row 3: Present Value of Project (PrV) and % Present Value of Project
-                    col5, col6 = st.columns(2)
-                    with col5:
-                        prv_formatted = format_currency(portfolio_summary['total_planned_value_project'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">🏗️ **Present Value of Portfolio (PrV)**<br><span class="portfolio-financial-value">{prv_formatted}</span></div>', unsafe_allow_html=True)
-                    with col6:
-                        percent_prv = portfolio_summary['total_percent_present_value_project']
-                        st.markdown(f'<div class="portfolio-financial-metric">📈 **% Present Value of Portfolio**<br><span class="portfolio-financial-value">{percent_prv:.2f}%</span></div>', unsafe_allow_html=True)
-
-                    st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
-
-                    # Row 4: Likely Value of Project (LkV) and % Likely Value of Project
-                    col7, col8 = st.columns(2)
-                    with col7:
-                        lkv_formatted = format_currency(portfolio_summary['total_likely_value_project'], controls['currency_symbol'], controls['currency_postfix'])
-                        st.markdown(f'<div class="portfolio-financial-metric">🔮 **Likely Value of Portfolio (LkV)**<br><span class="portfolio-financial-value">{lkv_formatted}</span></div>', unsafe_allow_html=True)
-                    with col8:
-                        percent_lkv = portfolio_summary['total_percent_likely_value_project']
-                        st.markdown(f'<div class="portfolio-financial-metric">🎯 **% Value of Portfolio**<br><span class="portfolio-financial-value">{percent_lkv:.2f}%</span></div>', unsafe_allow_html=True)
-                    
-                    st.markdown("#### 📈 Portfolio Progress Summary")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        budget_used = safe_divide(portfolio_summary['total_ac'], portfolio_summary['total_bac']) * 100
-                        st.metric("% Budget Used", format_percentage(budget_used))
-                    with col2:
-                        time_used = portfolio_summary['weighted_avg_time_used']
-                        st.metric("% Time Used", format_percentage(time_used))
-                    with col3:
-                        earned_value_pct = safe_divide(portfolio_summary['total_ev'], portfolio_summary['total_bac']) * 100
-                        st.metric("% Value Earned", format_percentage(earned_value_pct))
-                    with col4:
-                        avg_progress = portfolio_summary['average_progress']
-                        st.metric("% Present Value of Progress", format_percentage(avg_progress))
-                    
-                    st.markdown("#### 🎯 Performance Quadrants Analysis")
-                    quadrant_data = []
-                    labels = {
-                        'on_budget_on_schedule': '🟢 On Budget & On Schedule',
-                        'on_budget_behind_schedule': '🟡 On Budget & Behind Schedule', 
-                        'over_budget_on_schedule': '🟡 Over Budget & On Schedule',
-                        'over_budget_behind_schedule': '🔴 Over Budget & Behind Schedule'
-                    }
-                    
-                    for key, label in labels.items():
-                        count = portfolio_summary['quadrants'][key]
-                        count_pct = portfolio_summary['quadrant_percentages'][key]
-                        budget = portfolio_summary['quadrant_budgets'][key]
-                        budget_pct = portfolio_summary['budget_percentages'][key]
-                        quadrant_data.append({
-                            'Performance Category': label,
-                            'Project Count': count,
-                            'Count %': format_percentage(count_pct),
-                            'Total Budget': format_currency(budget, controls['currency_symbol'], controls['currency_postfix']),
-                            'Budget %': format_percentage(budget_pct)
-                        })
-                    st.dataframe(pd.DataFrame(quadrant_data), width="stretch", hide_index=True)
-                    
-                    st.markdown("#### 📊 Portfolio Performance Charts")
-                    try:
-                        if not MATPLOTLIB_AVAILABLE:
-                            st.error("📊 Charts require matplotlib. Please install: pip install matplotlib")
-                            st.info("Charts are disabled until matplotlib is installed.")
-                            return
-
-                        fig = plt.figure(figsize=(20, 16))
-                        plt.style.use('seaborn-v0_8-whitegrid')
-
-                        # Portfolio Performance Matrix
-                        ax1 = plt.subplot(2, 2, 1)
-                        ax1.set_xlim(0.5, 1.5); ax1.set_ylim(0.5, 1.5)
-                        ax1.fill([1.0, 1.5, 1.5, 1.0], [1.0, 1.0, 1.5, 1.5], alpha=0.2, color='green')
-                        ax1.fill([0.5, 1.0, 1.0, 0.5], [1.0, 1.0, 1.5, 1.5], alpha=0.2, color='yellow')
-                        ax1.fill([0.5, 1.0, 1.0, 0.5], [0.5, 0.5, 1.0, 1.0], alpha=0.2, color='red')
-                        ax1.fill([1.0, 1.5, 1.5, 1.0], [0.5, 0.5, 1.0, 1.0], alpha=0.2, color='yellow')
-                        ax1.axhline(1.0, color="gray", linestyle="--", alpha=0.7)
-                        ax1.axvline(1.0, color="gray", linestyle="--", alpha=0.7)
-                        p_cpi = portfolio_summary['portfolio_cpi']; p_spi = portfolio_summary['portfolio_spi']
-                        port_color = 'green' if (p_cpi >= 1.0 and p_spi >= 1.0) else 'orange' if (p_cpi >= 0.9 or p_spi >= 0.9) else 'red'
-                        ax1.scatter([p_spi], [p_cpi], s=200, c=port_color, alpha=0.8, edgecolors='black', linewidth=2, label='Portfolio')
-                        if 'cost_performance_index' in batch_df.columns and 'schedule_performance_index' in batch_df.columns:
-                            ax1.scatter(batch_df['schedule_performance_index'].fillna(0), batch_df['cost_performance_index'].fillna(0), s=30, alpha=0.5, c='blue', label='Projects')
-                        ax1.set_xlabel('Schedule Performance Index (SPI)'); ax1.set_ylabel('Cost Performance Index (CPI)')
-                        ax1.set_title('Portfolio Performance Matrix', fontweight='bold'); ax1.legend(); ax1.grid(True, alpha=0.3)
-                        
-                        # Portfolio Progress Summary
-                        ax2 = plt.subplot(2, 2, 2)
-                        categories = ['Budget Used', 'Earned Value', 'Average Progress']
-                        values = [
-                            safe_divide(portfolio_summary['total_ac'], portfolio_summary['total_bac']) * 100,
-                            safe_divide(portfolio_summary['total_ev'], portfolio_summary['total_bac']) * 100,
-                            portfolio_summary['average_progress']
-                        ]
-                        bars = ax2.barh(categories, values, color=['#ff6b6b', '#45b7d1', '#2E8B57'], alpha=0.8)
-                        ax2.axvline(100, color='gray', linestyle='--', alpha=0.7)
-                        ax2.set_xlim(0, max(120, max(values) + 10))
-                        ax2.set_xlabel('Percentage (%)'); ax2.set_title('Portfolio Progress Summary', fontweight='bold')
-                        for bar, value in zip(bars, values):
-                            ax2.text(value + 2, bar.get_y() + bar.get_height()/2, f'{value:.1f}%', va='center', fontweight='bold')
-                        
-                        # Portfolio Time/Budget Performance Curve
-                        ax3 = plt.subplot(2, 1, 2)
-                        T = np.linspace(0, 1, 101)
-                        blue_curve = -0.794*T**3 + 0.632*T**2 + 1.162*T
-                        red_curve = -0.387*T**3 + 1.442*T**2 - 0.055*T
-                        ax3.plot(T, blue_curve, 'b-', linewidth=2, label='Blue Curve', alpha=0.8)
-                        ax3.plot(T, red_curve, 'r-', linewidth=2, label='Red Curve', alpha=0.8)
-                        if 'actual_duration_months' in batch_df.columns and 'original_duration_months' in batch_df.columns:
-                            portfolio_norm_time = (batch_df['actual_duration_months'] / batch_df['original_duration_months']).fillna(0).mean()
-                        else:
-                            portfolio_norm_time = 0.5
-                        ax3.axvline(portfolio_norm_time, color='yellow', linestyle='--', alpha=0.8, linewidth=2, label='Portfolio Data Date')
-                        if 'actual_duration_months' in batch_df.columns and 'earned_value' in batch_df.columns and 'bac' in batch_df.columns:
-                            project_norm_times = batch_df['actual_duration_months'] / batch_df['original_duration_months']
-                            project_norm_evs = batch_df['earned_value'] / batch_df['bac']
-                            cpis = batch_df.get('cost_performance_index', pd.Series([1.0] * len(batch_df))).fillna(1.0)
-                            colors = ['green' if cpi >= 1.0 else 'orange' if cpi >= 0.9 else 'red' for cpi in cpis]
-                            ax3.scatter(project_norm_times, project_norm_evs, c=colors, s=50, alpha=0.7, edgecolors='black', linewidth=1, label='Projects')
-
-                        # Add portfolio point (% time used, % budget used) as yellow circle
-                        portfolio_time_used = portfolio_summary['weighted_avg_time_used'] / 100  # Convert to normalized (0-1)
-                        portfolio_budget_used = safe_divide(portfolio_summary['total_ac'], portfolio_summary['total_bac'])
-                        ax3.scatter([portfolio_time_used], [portfolio_budget_used], c='yellow', s=200, alpha=0.8,
-                                   edgecolors='black', linewidth=2, label='Portfolio', marker='o')
-                        ax3.set_xlim(0, 1); ax3.set_ylim(0, 1.2); ax3.set_xlabel('Time (Normalized)'); ax3.set_ylabel('PV (Normalized)')
-                        ax3.set_title('Portfolio Time/Budget Performance Curve', fontweight='bold'); ax3.legend(loc='upper left'); ax3.grid(True, alpha=0.3)
-
-                        plt.tight_layout()
-                        st.pyplot(fig, width="stretch")
-                    except Exception as e:
-                        st.error(f"Chart generation failed: {e}")
-
-                    st.markdown("#### 📋 Portfolio Executive Report")
-                    if st.button("🚀 Generate Portfolio Executive Report", type="primary"):
-                        portfolio_prompt = create_portfolio_executive_summary(portfolio_summary, controls)
-                        with st.spinner("Generating comprehensive portfolio executive report..."):
-                            executive_report = safe_llm_request(llm_config['provider'], llm_config['model'], llm_config['api_key'],
-                                                                llm_config['temperature'], llm_config['timeout'],
-                                                                portfolio_prompt)
-                            st.session_state.portfolio_executive_report = executive_report
-                    
-                    if "portfolio_executive_report" in st.session_state:
-                        portfolio_report = st.session_state.portfolio_executive_report
-                        if portfolio_report.startswith("Error:") or portfolio_report == "No API key available":
-                            if portfolio_report == "No API key available":
-                                st.warning("⚠️ No API key available. Please upload an API key file in the LLM Provider section.")
-                            else:
-                                st.error(portfolio_report)
-                        else:
-                            st.markdown("#### 📄 Portfolio Executive Assessment")
-                            st.markdown(portfolio_report)
-                            st.download_button("📥 Download Report", portfolio_report, file_name=f"portfolio_executive_report.md", mime="text/markdown")
-                
-                st.markdown("### 📋 Detailed Results")
-
-                # Format the results for display with proper formatting
-                display_batch_df = format_batch_results_for_display(batch_df, controls['currency_symbol'], controls['currency_postfix'])
-                st.dataframe(display_batch_df, width="stretch", height=400)
-
-                # Prepare CSV data with raw values (no formatting for CSV)
-                csv_batch_df = format_batch_results_for_download(batch_df)
-                csv_data = csv_batch_df.to_csv(index=False).encode('utf-8')
-
-                # Create two columns for the buttons
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.download_button("📥 Download Batch Results", csv_data, file_name="batch_evm_results.csv", mime="text/csv", type="primary")
-
-                with col2:
-                    if st.button("📊 Generate Executive Dashboard", type="primary"):
-                        # Store the batch results and currency settings in session state for the dashboard
-                        if st.session_state.batch_results is not None:
-                            st.session_state.dashboard_data = st.session_state.batch_results.copy()
-
-                            # Get fresh currency settings directly from session state
-                            current_currency_symbol = st.session_state.get('currency_symbol', '$')
-                            current_currency_postfix = st.session_state.get('currency_postfix', '')
-
-                            # Pass currency settings to dashboard
-                            st.session_state.dashboard_currency_symbol = current_currency_symbol
-                            st.session_state.dashboard_currency_postfix = current_currency_postfix
-
-                            st.switch_page("pages/2_Executive_Dashboard.py")
-                        else:
-                            st.error("No batch results available. Please run batch calculation first.")
-            return
-        
-        # For demo data or processed CSV data, use standard column mapping since it's already in correct format
+        # For single project analysis, ensure column mapping is available
+        # Use existing column_mapping from sidebar, or provide fallback for demo/csv data
         if st.session_state.get('file_type') in ['demo', 'csv']:
+            # Override with standard mapping for demo/csv since data is already normalized
             column_mapping = {
                 'pid_col': 'Project ID',
                 'pname_col': 'Project',
@@ -3661,9 +3397,11 @@ def main():
                 'st_col': 'Plan Start',
                 'fn_col': 'Plan Finish'
             }
-        elif not all(column_mapping.get(key) for key in ['pid_col', 'bac_col', 'ac_col', 'st_col', 'fn_col']):
-            st.warning("⚠️ Please complete the column mapping in the sidebar first.")
-            return
+        else:
+            # Validate that column mapping exists and has required fields
+            if not column_mapping or not all(column_mapping.get(key) for key in ['pid_col', 'bac_col', 'ac_col', 'st_col', 'fn_col']):
+                st.warning("⚠️ Please complete the column mapping in the sidebar first.")
+                return
 
         try:
             pid_col = column_mapping['pid_col']

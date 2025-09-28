@@ -9,7 +9,8 @@
       "Bash(mv:*)",
       "Bash(dir)",
       "Bash(pip install:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

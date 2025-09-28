@@ -354,28 +354,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
-def load_data():
-    """Load and process the portfolio data"""
-    try:
-        # You can replace this with your actual file path
-        df = pd.read_csv('batch_evm_results.csv')
-        
-        # Clean column names
-        df.columns = df.columns.str.strip()
-        
-        # Handle missing values
-        numeric_columns = ['Budget', 'Actual Cost', 'Earned Value', 'Plan Value', 
-                          'CPI', 'SPI', 'ETC', 'EAC', '% Budget Used', '% Time Used']
-        
-        for col in numeric_columns:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        return df
-    except FileNotFoundError:
-        st.error("Please upload the batch_evm_results.csv file to proceed.")
-        return None
 
 def format_currency(amount, currency_symbol='$', currency_postfix='', thousands=True):
     """Format currency values with proper symbol and postfix"""
@@ -405,18 +383,41 @@ def map_columns_to_standard(df):
     """Map Portfolio Analysis columns to dashboard expected columns"""
     # Create a mapping from Portfolio Analysis format to Dashboard format
     column_mapping = {
-        # Portfolio Analysis -> Dashboard expected
+        # Real batch calculation results (from Project Analysis)
         'bac': 'Budget',
         'ac': 'Actual Cost',
         'earned_value': 'Earned Value',
         'planned_value': 'Plan Value',
-        'etc': 'ETC',
+        'estimate_to_complete': 'ETC',
         'estimate_at_completion': 'EAC',
         'cost_performance_index': 'CPI',
         'schedule_performance_index': 'SPI',
         'spie': 'SPIe',
         'project_name': 'Project Name',
-        'project_id': 'Project ID'
+        'project_id': 'Project ID',
+        'organization': 'Organization',
+        'project_manager': 'Project Manager',
+        'plan_start': 'Plan Start',
+        'plan_finish': 'Plan Finish',
+        'cost_variance': 'Cost Variance',
+        'schedule_variance': 'Schedule Variance',
+        'variance_at_completion': 'VAC',
+        'percent_complete': 'Percent Complete',
+        'actual_duration_months': 'Actual Duration',
+        'original_duration_months': 'Original Duration',
+        'forecast_duration': 'Forecast Duration',
+        'present_value': 'Present Value',
+        # File Management data format (uppercase) - for fallback
+        'BAC': 'Budget',
+        'AC': 'Actual Cost',
+        'Project ID': 'Project ID',
+        'Project': 'Project Name',
+        'Organization': 'Organization',
+        'Project Manager': 'Project Manager',
+        'Plan Start': 'Plan Start',
+        'Plan Finish': 'Plan Finish',
+        'CPI': 'CPI',
+        'SPI': 'SPI'
     }
 
     # Create a copy of the dataframe
@@ -426,6 +427,30 @@ def map_columns_to_standard(df):
     for source_col, target_col in column_mapping.items():
         if source_col in mapped_df.columns and target_col not in mapped_df.columns:
             mapped_df[target_col] = mapped_df[source_col]
+
+    # Ensure all expected columns exist with default values
+    expected_columns = {
+        'Budget': 0,
+        'Actual Cost': 0,
+        'Earned Value': 0,
+        'Plan Value': 0,
+        'CPI': 1.0,
+        'SPI': 1.0,
+        'SPIe': 1.0,
+        'ETC': 0,
+        'EAC': 0,
+        'Project Name': 'Unknown',
+        'Project ID': 'Unknown',
+        'Organization': 'Unknown',
+        'Project Manager': 'Unknown'
+    }
+
+    for col, default_value in expected_columns.items():
+        if col not in mapped_df.columns:
+            if col in ['Project Name', 'Project ID', 'Organization', 'Project Manager']:
+                mapped_df[col] = default_value
+            else:
+                mapped_df[col] = default_value
 
     return mapped_df
 
@@ -537,9 +562,42 @@ def main():
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         else:
-            df = load_data()
+            # No data available - inform user of proper workflow
+            st.sidebar.warning("⚠️ No portfolio data available")
+            st.sidebar.markdown("**Please use one of these options:**")
+            st.sidebar.markdown("• **File Management** → Run Batch EVM → **Portfolio Analysis**")
+            st.sidebar.markdown("• **Upload CSV file** using the uploader above")
+            df = None
     
     if df is None:
+        # Show helpful guidance when no data is available
+        st.markdown("""
+        <div class="main-header">
+            <h1>📊 Portfolio Analysis</h1>
+            <h3>Multi-Project Performance Dashboard</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("## 🚀 Get Started")
+        st.info("To view your portfolio analysis dashboard, you'll need to process your project data first.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            ### 📁 Recommended Workflow
+            1. **File Management** → Upload your project data
+            2. **Run Batch EVM** → Process all projects
+            3. **Portfolio Analysis** → Return here for insights
+            """)
+            if st.button("📁 Go to File Management", type="primary"):
+                st.switch_page("pages/1_File_Management.py")
+
+        with col2:
+            st.markdown("""
+            ### 📊 Direct Upload
+            Use the **CSV file uploader** in the sidebar to directly upload your batch EVM results.
+            """)
+
         st.stop()
 
     # Map columns to expected format and calculate metrics

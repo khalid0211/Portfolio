@@ -66,29 +66,40 @@ st.markdown("## Choose Your Tool")
 # 📊 PORTFOLIO MANAGEMENT SUITE
 # ═══════════════════════════════════════════════════════════════════
 st.markdown("### 📊 Portfolio Management")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("""
-    #### 🔍 Portfolio Analysis
-    - Upload project data (CSV/JSON)
-    - Perform EVM calculations
-    - Batch processing for multiple projects
-    - Download detailed results
+    #### 📁 File Management
+    - Data import (CSV/JSON)
+    - Configuration settings
+    - Batch calculations
+    - Export & download options
     """)
-    if st.button("🚀 Open Portfolio Analysis", key="portfolio_btn", width='stretch'):
-        st.switch_page("pages/1_Portfolio_Analysis.py")
+    if st.button("📁 Open File Management", key="file_mgmt_btn", width='stretch'):
+        st.switch_page("pages/1_File_Management.py")
 
 with col2:
     st.markdown("""
-    #### 📈 Executive Dashboard
-    - View portfolio health metrics
-    - Critical project alerts
-    - Strategic performance indicators
-    - Executive summary reports with filtering
+    #### 🔍 Project Analysis
+    - Single project EVM analysis
+    - Individual project insights
+    - Detailed calculations
+    - Project-level charts
     """)
-    if st.button("📊 Open Executive Dashboard", key="dashboard_btn", width='stretch'):
-        st.switch_page("pages/2_Executive_Dashboard.py")
+    if st.button("🚀 Open Project Analysis", key="project_btn", width='stretch'):
+        st.switch_page("pages/3_Project_Analysis.py")
+
+with col3:
+    st.markdown("""
+    #### 📈 Portfolio Analysis
+    - Portfolio health metrics
+    - Multi-project comparisons
+    - Strategic performance indicators
+    - Executive summary reports
+    """)
+    if st.button("📊 Open Portfolio Analysis", key="portfolio_btn", width='stretch'):
+        st.switch_page("pages/4_Portfolio_Analysis.py")
 
 st.markdown("---")
 
@@ -102,12 +113,12 @@ with col1:
     st.markdown("""
     #### 📝 Manual Data Entry
     - Quick project data input
-    - EVM calculation on-the-fly
-    - Single project analysis
-    - Instant results and visualizations
+    - Direct data entry interface
+    - Alternative to file upload
+    - Instant data validation
     """)
     if st.button("✏️ Open Manual Data Entry", key="manual_btn", width='stretch'):
-        st.switch_page("pages/3_Manual_Data_Entry.py")
+        st.switch_page("pages/2_Manual_Data_Entry.py")
 
 with col2:
     st.markdown("""
@@ -118,7 +129,7 @@ with col2:
     - Baseline comparison & export capabilities
     """)
     if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", width='stretch'):
-        st.switch_page("pages/5_Cash_Flow_Simulator.py")
+        st.switch_page("pages/6_Cash_Flow_Simulator.py")
 
 st.markdown("---")
 
@@ -137,18 +148,18 @@ with col1:
     - Advanced forecasting tools
     """)
     if st.button("🎯 Open EVM Simulator", key="evm_btn", width='stretch'):
-        st.switch_page("pages/6_EVM_Simulator.py")
+        st.switch_page("pages/7_EVM_Simulator.py")
 
 with col2:
     st.markdown("""
-    #### 📈 Portfolio Gantt Chart
+    #### 📈 Portfolio Gantt
     - Interactive baseline vs forecast timeline
     - Organization, budget, and date filtering
     - EV progress shading with forecast alerts
     - Hover insights for project detail
     """)
-    if st.button("📊 Open Gantt Chart", key="gantt_btn", width='stretch'):
-        st.switch_page("pages/4_Gantt_Chart.py")
+    if st.button("📊 Open Portfolio Gantt", key="gantt_btn", width='stretch'):
+        st.switch_page("pages/5_Portfolio_Gantt.py")
 
 
 # Quick stats if data exists
