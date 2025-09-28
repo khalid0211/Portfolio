@@ -593,7 +593,7 @@ def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str) -> 
         title_font=dict(color="#000000")
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_footer():

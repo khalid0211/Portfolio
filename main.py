@@ -76,7 +76,7 @@ with col1:
     - Batch processing for multiple projects
     - Download detailed results
     """)
-    if st.button("🚀 Open Portfolio Analysis", key="portfolio_btn", use_container_width=True):
+    if st.button("🚀 Open Portfolio Analysis", key="portfolio_btn", width='stretch'):
         st.switch_page("pages/1_Portfolio_Analysis.py")
 
 with col2:
@@ -87,7 +87,7 @@ with col2:
     - Strategic performance indicators
     - Executive summary reports with filtering
     """)
-    if st.button("📊 Open Executive Dashboard", key="dashboard_btn", use_container_width=True):
+    if st.button("📊 Open Executive Dashboard", key="dashboard_btn", width='stretch'):
         st.switch_page("pages/2_Executive_Dashboard.py")
 
 st.markdown("---")
@@ -106,7 +106,7 @@ with col1:
     - Single project analysis
     - Instant results and visualizations
     """)
-    if st.button("✏️ Open Manual Data Entry", key="manual_btn", use_container_width=True):
+    if st.button("✏️ Open Manual Data Entry", key="manual_btn", width='stretch'):
         st.switch_page("pages/3_Manual_Data_Entry.py")
 
 with col2:
@@ -117,7 +117,7 @@ with col2:
     - Inflation and delay modeling
     - Baseline comparison & export capabilities
     """)
-    if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", use_container_width=True):
+    if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", width='stretch'):
         st.switch_page("pages/5_Cash_Flow_Simulator.py")
 
 st.markdown("---")
@@ -136,7 +136,7 @@ with col1:
     - Schedule and cost impact analysis
     - Advanced forecasting tools
     """)
-    if st.button("🎯 Open EVM Simulator", key="evm_btn", use_container_width=True):
+    if st.button("🎯 Open EVM Simulator", key="evm_btn", width='stretch'):
         st.switch_page("pages/6_EVM_Simulator.py")
 
 with col2:
@@ -147,7 +147,7 @@ with col2:
     - EV progress shading with forecast alerts
     - Hover insights for project detail
     """)
-    if st.button("📊 Open Gantt Chart", key="gantt_btn", use_container_width=True):
+    if st.button("📊 Open Gantt Chart", key="gantt_btn", width='stretch'):
         st.switch_page("pages/4_Gantt_Chart.py")
 
 

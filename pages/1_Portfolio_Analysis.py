@@ -1121,9 +1121,10 @@ def scurve_cdf(x: float, alpha: float = 2.0, beta: float = 2.0) -> float:
 def calculate_durations(plan_start, plan_finish, data_date) -> tuple[float, float]:
     """Calculate durations with improved error handling."""
     try:
-        ps = parse_date_any(plan_start)
-        pf = parse_date_any(plan_finish)
-        dd = parse_date_any(data_date)
+        # Handle both raw dates and already-parsed datetime objects
+        ps = plan_start if isinstance(plan_start, datetime) else parse_date_any(plan_start)
+        pf = plan_finish if isinstance(plan_finish, datetime) else parse_date_any(plan_finish)
+        dd = data_date if isinstance(data_date, datetime) else parse_date_any(data_date)
         
         duration_to_date = max(((dd - ps).days / DAYS_PER_MONTH), 0.0)
         original_duration = max(((pf - ps).days / DAYS_PER_MONTH), 0.0)
@@ -1435,11 +1436,16 @@ def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_du
 
 @st.cache_data(show_spinner=False)
 def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
-                                  annual_inflation_rate, curve_type='linear', alpha=2.0, beta=2.0, 
+                                  annual_inflation_rate, curve_type='linear', alpha=2.0, beta=2.0,
                                   manual_pv=None, use_manual_pv=False, manual_ev=None, use_manual_ev=False) -> Dict[str, Any]:
     """Perform complete EVM analysis with comprehensive error handling."""
     try:
-        actual_duration, original_duration = calculate_durations(plan_start, plan_finish, data_date)
+        # Parse dates once and store the parsed versions
+        parsed_plan_start = parse_date_any(plan_start)
+        parsed_plan_finish = parse_date_any(plan_finish)
+        parsed_data_date = parse_date_any(data_date)
+
+        actual_duration, original_duration = calculate_durations(parsed_plan_start, parsed_plan_finish, parsed_data_date)
         present_value = calculate_present_value(ac, actual_duration, annual_inflation_rate)
         
         # Use manual PV if specified, otherwise calculate automatically
@@ -1458,7 +1464,7 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         else:
             earned_schedule = find_earned_schedule_linear(evm_metrics['earned_value'], bac, original_duration)
         
-        es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, plan_start, original_duration)
+        es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, parsed_plan_start, original_duration)
         
         # Calculate percentage metrics
         percent_budget_used = safe_divide(ac, bac) * 100 if bac > 0 else 0.0
@@ -1481,9 +1487,9 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         return {
             'bac': float(bac),
             'ac': float(ac),
-            'plan_start': parse_date_any(plan_start).strftime('%Y-%m-%d'),
-            'plan_finish': parse_date_any(plan_finish).strftime('%Y-%m-%d'),
-            'data_date': parse_date_any(data_date).strftime('%Y-%m-%d'),
+            'plan_start': parsed_plan_start.strftime('%Y-%m-%d'),
+            'plan_finish': parsed_plan_finish.strftime('%Y-%m-%d'),
+            'data_date': parsed_data_date.strftime('%Y-%m-%d'),
             'inflation_rate': round(annual_inflation_rate * 100.0, 3),
             'curve_type': curve_type,
             'alpha': alpha,
@@ -2532,7 +2538,7 @@ def render_manual_entry_link():
 
     if st.button("🎯 **Open Manual Data Entry Page**",
                 type="primary",
-                use_container_width=True,
+                width='stretch',
                 key="open_manual_entry"):
         st.switch_page("pages/Manual_Data_Entry.py")
 

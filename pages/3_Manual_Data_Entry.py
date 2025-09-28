@@ -715,7 +715,7 @@ def main():
             # Display table
             event = st.dataframe(
                 display_df,
-                use_container_width=True,
+                width='stretch',
                 on_select="rerun",
                 selection_mode="single-row"
             )

@@ -630,7 +630,7 @@ def main():
             }
         ))
         fig_cpi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_cpi, use_container_width=True)
+        st.plotly_chart(fig_cpi, width='stretch')
     
     with col2:
         # SPI Gauge - Dial with Needle
@@ -660,7 +660,7 @@ def main():
             }
         ))
         fig_spi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_spi, use_container_width=True)
+        st.plotly_chart(fig_spi, width='stretch')
 
     with col3:
         # % Budget Used (AC/BAC) Gauge - Dial with Needle
@@ -691,7 +691,7 @@ def main():
             }
         ))
         fig_budget_used.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_budget_used, use_container_width=True)
+        st.plotly_chart(fig_budget_used, width='stretch')
 
     with col4:
         # % Earned Value (EV/BAC) Gauge - Dial with Needle
@@ -722,7 +722,7 @@ def main():
             }
         ))
         fig_earned_value.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_earned_value, use_container_width=True)
+        st.plotly_chart(fig_earned_value, width='stretch')
 
     # Project Health Distribution
     col1, col2 = st.columns([1, 1])
@@ -744,7 +744,7 @@ def main():
         )
         fig_health.update_traces(textposition='inside', textinfo='percent+label')
         fig_health.update_layout(height=400)
-        st.plotly_chart(fig_health, use_container_width=True)
+        st.plotly_chart(fig_health, width='stretch')
         
         # Health metrics with enhanced styling
         st.markdown(f'<div class="status-success">✅ Healthy Projects: {metrics["healthy_projects"]} ({metrics["healthy_projects"]/metrics["total_projects"]*100:.0f}%)</div>', unsafe_allow_html=True)
@@ -782,7 +782,7 @@ def main():
                 title=f'Amount ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})'
             )
         )
-        st.plotly_chart(fig_financial, use_container_width=True)
+        st.plotly_chart(fig_financial, width='stretch')
         
         # Financial alert
         if metrics['forecast_overrun'] > 0:
@@ -1177,12 +1177,12 @@ def main():
                         return 'background-color: #ffebee; color: #d32f2f; font-weight: bold;'
                     try:
                         styled_table = spotlight_table.style.applymap(highlight_critical_projects)
-                        st.dataframe(styled_table, use_container_width=True, height=300, column_config=spotlight_column_config)
+                        st.dataframe(styled_table, width='stretch', height=300, column_config=spotlight_column_config)
                     except:
-                        st.dataframe(spotlight_table, use_container_width=True, height=300, column_config=spotlight_column_config)
+                        st.dataframe(spotlight_table, width='stretch', height=300, column_config=spotlight_column_config)
                 else:
                     # Standard display for other views
-                    st.dataframe(spotlight_table, use_container_width=True, height=300, column_config=spotlight_column_config)
+                    st.dataframe(spotlight_table, width='stretch', height=300, column_config=spotlight_column_config)
 
                 st.markdown(f"**{view_description}**")
             else:
@@ -1554,7 +1554,7 @@ def main():
                         )
                     )
 
-                    st.plotly_chart(fig_performance, use_container_width=True)
+                    st.plotly_chart(fig_performance, width='stretch')
 
                     # Filter summary for performance curve
                     col1, col2, col3 = st.columns(3)
@@ -1661,9 +1661,9 @@ def main():
 
                 if 'Health_Category' in display_df.columns:
                     styled_df = display_df.style.applymap(highlight_health, subset=['Health_Category'])
-                    st.dataframe(styled_df, use_container_width=True, height=400, column_config=column_config)
+                    st.dataframe(styled_df, width='stretch', height=400, column_config=column_config)
                 else:
-                    st.dataframe(display_df, use_container_width=True, height=400, column_config=column_config)
+                    st.dataframe(display_df, width='stretch', height=400, column_config=column_config)
 
         # Organizations Expander
         with st.expander("🏢 Organizations", expanded=False):
@@ -1775,12 +1775,12 @@ def main():
                         try:
                             if 'Health_Category' in org_display_formatted.columns and len(org_display_formatted) > 0:
                                 styled_org_df = org_display_formatted.style.applymap(highlight_health, subset=['Health_Category'])
-                                st.dataframe(styled_org_df, use_container_width=True, height=300, column_config=org_column_config)
+                                st.dataframe(styled_org_df, width='stretch', height=300, column_config=org_column_config)
                             else:
-                                st.dataframe(org_display_formatted, use_container_width=True, height=300, column_config=org_column_config)
+                                st.dataframe(org_display_formatted, width='stretch', height=300, column_config=org_column_config)
                         except (KeyError, ValueError) as e:
                             # Fallback to unstyled dataframe if styling fails
-                            st.dataframe(org_display_formatted, use_container_width=True, height=300)
+                            st.dataframe(org_display_formatted, width='stretch', height=300)
                     else:
                         st.info("No organization data available with current filters.")
 
@@ -1837,7 +1837,7 @@ def main():
                             marker_line_width=0
                         )
 
-                        st.plotly_chart(fig_portfolio, use_container_width=True)
+                        st.plotly_chart(fig_portfolio, width='stretch')
 
                         # Add summary statistics below the chart
                         col1, col2, col3 = st.columns(3)
@@ -2204,7 +2204,7 @@ def main():
                                                 textposition='outside'
                                             )
 
-                                        st.plotly_chart(fig_cash_flow, use_container_width=True)
+                                        st.plotly_chart(fig_cash_flow, width='stretch')
 
                                         # Display summary metrics
                                         col1, col2 = st.columns(2)
@@ -2247,14 +2247,14 @@ def main():
                                                     pivot_df[col] = pivot_df[col].apply(
                                                         lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
                                                     )
-                                                st.dataframe(pivot_df, use_container_width=True)
+                                                st.dataframe(pivot_df, width='stretch')
                                             else:
                                                 # Show single scenario table
                                                 display_cash_flow = period_cash_flow.copy()
                                                 display_cash_flow['Cash_Flow'] = display_cash_flow['Cash_Flow'].apply(
                                                     lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
                                                 )
-                                                st.dataframe(display_cash_flow, use_container_width=True)
+                                                st.dataframe(display_cash_flow, width='stretch')
                                     else:
                                         st.warning("No valid cash flow data could be generated from the selected projects.")
 
@@ -2439,7 +2439,7 @@ def main():
                                     cliponaxis=False  # Prevent clipping of text labels
                                 )
 
-                                st.plotly_chart(fig_approvals, use_container_width=True)
+                                st.plotly_chart(fig_approvals, width='stretch')
 
                                 # Show detailed data table
                                 with st.expander("📊 Detailed Approvals Data", expanded=False):
@@ -2457,7 +2457,7 @@ def main():
                                         if col in display_approvals.columns:
                                             display_approvals[col] = display_approvals[col].apply(lambda x: f"{x:.1f}%")
 
-                                    st.dataframe(display_approvals, use_container_width=True)
+                                    st.dataframe(display_approvals, width='stretch')
 
                             else:
                                 st.warning("No valid approval data could be generated from the selected projects.")

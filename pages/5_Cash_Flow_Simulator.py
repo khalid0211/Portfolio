@@ -509,7 +509,7 @@ fig.update_layout(
     margin=dict(l=40, r=40, t=60, b=40)
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')
 
 # Compact Results Section
 baseline_budget = sum(baseline_monthly_cashflows)
@@ -685,7 +685,7 @@ if st.session_state.baseline_data is not None:
 
         st.dataframe(
             df_display,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config={
                 "Scenario": st.column_config.TextColumn("Scenario", width="small"),
