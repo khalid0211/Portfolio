@@ -192,6 +192,9 @@ def add_new_project(project_data: Dict[str, Any]) -> bool:
         # Save using the proper persistence mechanism
         save_table_replace(updated_df, DEFAULT_DATASET_TABLE)
 
+        # Set file type for batch processing compatibility
+        st.session_state.file_type = "manual"
+
         # Set flag to switch to view tab
         st.session_state.active_tab = 0
         st.session_state.project_just_added = True
@@ -420,6 +423,9 @@ def main():
             # Use proper persistence mechanism
             demo_df = pd.DataFrame([demo_data])
             save_table_replace(demo_df, DEFAULT_DATASET_TABLE)
+
+            # Set file type for batch processing
+            st.session_state.file_type = "demo"
 
             # Update config
             st.session_state.config_dict.update({

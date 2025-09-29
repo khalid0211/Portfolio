@@ -93,10 +93,10 @@ def render_data_source_section():
     # Simple data source selection
     data_source = st.radio(
         "Select Data Source",
-        options=["Load JSON", "Load CSV", "Manual Entry"],
+        options=["Load JSON", "Load CSV"],
         index=0,
         key="data_source_radio",
-        help="Choose JSON for comprehensive data with configuration, CSV for data-only imports, or Manual Entry to create a blank table"
+        help="Choose JSON for comprehensive data with configuration, or CSV for data-only imports"
     )
 
     selected_table = None
@@ -112,21 +112,15 @@ def render_data_source_section():
         st.info("💡 Upload CSV files containing project data. Configuration will be set to defaults")
         file_types = ["csv"]
         help_text = "CSV files contain data only - you'll need to map columns to EVM fields"
-    else:  # Manual Entry
-        st.info("💡 Create a blank table that you can fill in manually with your project data")
-        file_types = None
-        help_text = "Start with an empty table and add your projects manually"
 
-    # File uploader for JSON and CSV options only
-    uploaded_file = None
-    if data_source != "Manual Entry":
-        uploaded_file = st.file_uploader(
-            "Choose file",
-            type=file_types,
-            key="unified_file_uploader",
-            help=help_text,
-            label_visibility="visible"
-        )
+    # File uploader for JSON and CSV options
+    uploaded_file = st.file_uploader(
+        "Choose file",
+        type=file_types,
+        key="unified_file_uploader",
+        help=help_text,
+        label_visibility="visible"
+    )
 
     # CSV Column Mapping Interface (always visible when CSV is selected)
     if data_source == "Load CSV":
@@ -434,21 +428,6 @@ def render_data_source_section():
                 st.error(f"❌ Error processing file: {str(e)}")
                 logging.error(f"File processing error: {e}")
 
-    # Manual Entry option
-    elif data_source == "Manual Entry":
-        if st.button("🆕 Initialize Empty Project Table", key="init_empty"):
-            # Create empty dataframe with required columns
-            empty_df = pd.DataFrame({
-                'Project_Name': [],
-                'Budget': [],
-                'Start_Date': [],
-                'End_Date': [],
-                'Actual_Cost': [],
-                'Completion_Percentage': []
-            })
-            st.session_state.data_df = empty_df
-            st.session_state.file_type = "manual"
-            st.success("✅ Empty project table initialized!")
 
     st.markdown('</div>', unsafe_allow_html=True)
     return df, selected_table, column_mapping
@@ -564,7 +543,7 @@ def render_batch_calculation_section():
                 controls = st.session_state.config_dict.get('controls', {})
 
                 # Set up column mapping based on file type
-                if st.session_state.get('file_type') in ['demo', 'csv', 'json']:
+                if st.session_state.get('file_type') in ['demo', 'manual', 'csv', 'json']:
                     column_mapping = {
                         'pid_col': 'Project ID',
                         'pname_col': 'Project',
@@ -576,6 +555,22 @@ def render_batch_calculation_section():
                         'fn_col': 'Plan Finish',
                         'cp_col': 'Completion %'
                     }
+
+                    # Add optional PV/EV columns if they exist in the data
+                    if st.session_state.data_df is not None and not st.session_state.data_df.empty:
+                        df_columns = st.session_state.data_df.columns.tolist()
+
+                        # Map manual PV/EV columns to standard PV/EV names
+                        if 'Manual_PV' in df_columns:
+                            column_mapping['pv_col'] = 'Manual_PV'
+                        if 'Manual_EV' in df_columns:
+                            column_mapping['ev_col'] = 'Manual_EV'
+
+                        # Include manual toggles for reference (though not used directly in EVM calculations)
+                        if 'Use_Manual_PV' in df_columns:
+                            column_mapping['use_manual_pv_col'] = 'Use_Manual_PV'
+                        if 'Use_Manual_EV' in df_columns:
+                            column_mapping['use_manual_ev_col'] = 'Use_Manual_EV'
                 else:
                     # For other file types, you might need column mapping UI
                     st.error("Column mapping not implemented for this file type yet")
