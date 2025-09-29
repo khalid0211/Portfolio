@@ -1192,8 +1192,7 @@ def main():
     
     
     # Interactive Data Explorer
-    with st.expander("📋 Executive Project Intelligence Center", expanded=False):
-        st.markdown('<div class="section-header">🔍 Advanced Portfolio Analytics & Filtering</div>', unsafe_allow_html=True)
+    with st.expander("Advanced Portfolio Analytics", expanded=False):
         
         # Create budget categories using configurable tier system
         # Get tier configuration from session state
@@ -1862,62 +1861,187 @@ def main():
                 else:
                     st.info("Organization data not available for consolidation.")
 
-        # Portfolio Graph Expander
-        with st.expander("📊 Portfolio Graph", expanded=False):
+        # Portfolio Budget Chart Expander
+        with st.expander("📊 Portfolio Budget Chart", expanded=False):
             # Get organization column name
             org_col = org_columns[0] if org_columns else 'Organization'
 
             if org_col in filtered_df.columns and len(filtered_df) > 0:
                 try:
-                    # Calculate total budget by organization
-                    org_budget_summary = filtered_df.groupby(org_col).agg({
-                        'Budget': 'sum'
-                    }).reset_index()
-
-                    # Sort by budget in descending order
-                    org_budget_summary = org_budget_summary.sort_values('Budget', ascending=True)  # ascending=True for horizontal bar chart
-
-                    if len(org_budget_summary) > 0:
-                        # Create horizontal bar chart
-                        fig_portfolio = px.bar(
-                            org_budget_summary,
-                            x='Budget',
-                            y=org_col,
-                            orientation='h',
-                            title="Total Budget by Organization",
-                            labels={'Budget': f'Total Budget ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})', org_col: 'Organization'},
-                            color='Budget',
-                            color_continuous_scale='viridis'
+                    # Add chart type selection
+                    col1, col2 = st.columns([1, 3])
+                    with col1:
+                        chart_type = st.selectbox(
+                            "Chart Type:",
+                            ["Total Budget", "Budget by Tier"],
+                            help="Select chart type: Total Budget shows organization totals, Budget by Tier shows stacked bars by tier"
                         )
 
-                        # Update layout for better visualization
-                        fig_portfolio.update_layout(
-                            height=max(400, len(org_budget_summary) * 40),  # Dynamic height based on number of organizations
-                            showlegend=False,
-                            xaxis=dict(tickformat=',.0f'),
-                            yaxis=dict(title=org_col),
-                            coloraxis_showscale=False
-                        )
+                    if chart_type == "Total Budget":
+                        # Original implementation - Calculate total budget by organization
+                        org_budget_summary = filtered_df.groupby(org_col).agg({
+                            'Budget': 'sum'
+                        }).reset_index()
 
-                        # Update traces for better appearance
-                        fig_portfolio.update_traces(
-                            texttemplate='%{x:,.0f}',
-                            textposition='outside',
-                            marker_line_width=0
-                        )
+                        # Sort by budget in descending order
+                        org_budget_summary = org_budget_summary.sort_values('Budget', ascending=True)  # ascending=True for horizontal bar chart
 
-                        st.plotly_chart(fig_portfolio, width='stretch')
+                        if len(org_budget_summary) > 0:
+                            # Create horizontal bar chart
+                            fig_portfolio = px.bar(
+                                org_budget_summary,
+                                x='Budget',
+                                y=org_col,
+                                orientation='h',
+                                title="Total Budget by Organization",
+                                labels={'Budget': f'Total Budget ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})', org_col: 'Organization'},
+                                color='Budget',
+                                color_continuous_scale='viridis'
+                            )
 
-                        # Add summary statistics below the chart
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Organizations", len(org_budget_summary))
-                        with col2:
-                            st.metric("Largest Budget", format_currency(org_budget_summary['Budget'].max(), currency_symbol, currency_postfix, thousands=False))
-                        with col3:
-                            st.metric("Smallest Budget", format_currency(org_budget_summary['Budget'].min(), currency_symbol, currency_postfix, thousands=False))
+                            # Update layout for better visualization
+                            fig_portfolio.update_layout(
+                                height=max(400, len(org_budget_summary) * 40),  # Dynamic height based on number of organizations
+                                showlegend=False,
+                                xaxis=dict(tickformat=',.0f'),
+                                yaxis=dict(title=org_col),
+                                coloraxis_showscale=False
+                            )
 
-                    else:
+                            # Update traces for better appearance
+                            fig_portfolio.update_traces(
+                                texttemplate='%{x:,.0f}',
+                                textposition='outside',
+                                marker_line_width=0
+                            )
+
+                            st.plotly_chart(fig_portfolio, width='stretch')
+
+                            # Add summary statistics below the chart
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Organizations", len(org_budget_summary))
+                            with col2:
+                                st.metric("Largest Budget", format_currency(org_budget_summary['Budget'].max(), currency_symbol, currency_postfix, thousands=False))
+                            with col3:
+                                st.metric("Smallest Budget", format_currency(org_budget_summary['Budget'].min(), currency_symbol, currency_postfix, thousands=False))
+
+                    else:  # Budget by Tier
+                        # Prepare data with tier information
+                        tier_df = filtered_df.copy()
+                        if 'Budget_Category' in tier_df.columns:
+                            # Create pivot table for stacked bar chart
+                            pivot_df = tier_df.groupby([org_col, 'Budget_Category'])['Budget'].sum().reset_index()
+                            pivot_wide = pivot_df.pivot(index=org_col, columns='Budget_Category', values='Budget').fillna(0)
+
+                            # Sort organizations by total budget
+                            pivot_wide['Total'] = pivot_wide.sum(axis=1)
+                            pivot_wide = pivot_wide.sort_values('Total', ascending=True)
+                            pivot_wide = pivot_wide.drop('Total', axis=1)
+
+                            # Reset index to make organization a column again
+                            pivot_wide = pivot_wide.reset_index()
+
+                            # Get tier configuration for colors
+                            tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+                            default_tier_config = {
+                                'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+                                'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
+                            }
+                            tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+                            tier_colors = tier_config.get('colors', default_tier_config['colors'])
+
+                            # Create color mapping for tiers
+                            color_map = {}
+                            available_tiers = [col for col in pivot_wide.columns if col != org_col]
+                            for i, tier in enumerate(available_tiers):
+                                # Try to match tier with configured names
+                                tier_index = 0
+                                for j, configured_tier in enumerate(tier_names):
+                                    if configured_tier in tier:
+                                        tier_index = j
+                                        break
+                                color_map[tier] = tier_colors[tier_index % len(tier_colors)]
+
+                            # Create stacked horizontal bar chart
+                            fig_portfolio = px.bar(
+                                pivot_wide,
+                                x=available_tiers,
+                                y=org_col,
+                                orientation='h',
+                                title="Budget by Organization and Tier",
+                                labels={'value': f'Budget ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})', org_col: 'Organization'},
+                                color_discrete_map=color_map
+                            )
+
+                            # Update layout for stacked bar chart
+                            fig_portfolio.update_layout(
+                                height=max(400, len(pivot_wide) * 50),  # Slightly more height for stacked bars
+                                showlegend=True,
+                                xaxis=dict(tickformat=',.0f'),
+                                yaxis=dict(title=org_col),
+                                legend=dict(
+                                    orientation="h",
+                                    yanchor="bottom",
+                                    y=1.02,
+                                    xanchor="right",
+                                    x=1,
+                                    title="Budget Tiers"
+                                ),
+                                barmode='stack'
+                            )
+
+                            # Update traces for stacked appearance
+                            fig_portfolio.update_traces(
+                                textposition='inside',
+                                texttemplate='%{x:,.0f}',
+                                textfont_size=10
+                            )
+
+                            st.plotly_chart(fig_portfolio, width='stretch')
+
+                            # Add tier summary statistics
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Organizations", len(pivot_wide))
+                            with col2:
+                                total_budgets = pivot_wide.select_dtypes(include=[np.number]).sum(axis=1)
+                                st.metric("Largest Total", format_currency(total_budgets.max(), currency_symbol, currency_postfix, thousands=False))
+                            with col3:
+                                st.metric("Tiers Present", len(available_tiers))
+                            with col4:
+                                st.metric("Total Projects", len(tier_df))
+
+                            # Show tier distribution with proper ordering and percentages
+                            st.markdown("**Tier Distribution Across Organizations:**")
+
+                            # Calculate total budget for percentage calculations
+                            total_portfolio_budget = sum(pivot_wide[tier].sum() for tier in available_tiers)
+
+                            # Create ordered tier list based on tier configuration
+                            tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+
+                            # Sort available tiers by their position in tier_names configuration
+                            def get_tier_order(tier_name):
+                                # Find the index of this tier in the configuration
+                                for i, configured_tier in enumerate(tier_names):
+                                    if configured_tier in tier_name:
+                                        return i
+                                return len(tier_names)  # Unknown tiers go to the end
+
+                            ordered_tiers = sorted(available_tiers, key=get_tier_order)
+
+                            # Display tiers in proper order with percentages
+                            for tier in ordered_tiers:
+                                tier_total = pivot_wide[tier].sum()
+                                if tier_total > 0:
+                                    percentage = (tier_total / total_portfolio_budget * 100) if total_portfolio_budget > 0 else 0
+                                    st.write(f"• **{tier}**: {format_currency(tier_total, currency_symbol, currency_postfix, thousands=False)} [{percentage:.1f}%]")
+
+                        else:
+                            st.warning("Budget tier information (Budget_Category) not available. Please ensure tier configuration is set up.")
+
+                    if len(filtered_df) == 0:
                         st.info("No organization budget data available to display.")
 
                 except Exception as e:
@@ -2890,6 +3014,148 @@ def main():
 
             else:
                 st.info("No data available for duration analysis.")
+
+        # Portfolio Treemap
+        with st.expander("Portfolio Treemap", expanded=False):
+            if len(filtered_df) > 0:
+                # Prepare data for treemap
+                treemap_df = filtered_df.copy()
+
+                # Get organization column name
+                org_col = org_columns[0] if org_columns else 'Organization'
+
+                # Ensure we have the required columns
+                if org_col in treemap_df.columns and 'Project Name' in treemap_df.columns and 'Budget' in treemap_df.columns:
+                    # Add tier names to the dataframe if not already present
+                    if 'tier_names' not in treemap_df.columns:
+                        treemap_df['tier_names'] = treemap_df['Budget_Category']
+
+                    # Create drill-down selection
+                    col1, col2 = st.columns([1, 3])
+
+                    with col1:
+                        drill_level = st.selectbox(
+                            "View Level:",
+                            ["Organization", "Project"],
+                            help="Select Organization for high-level view, Project for detailed drill-down"
+                        )
+
+                    with col2:
+                        if drill_level == "Project":
+                            # Show organization filter for project-level view
+                            available_orgs = sorted(treemap_df[org_col].dropna().unique())
+                            selected_org = st.selectbox(
+                                "Filter by Organization:",
+                                ["All"] + available_orgs,
+                                help="Select an organization to focus on its projects"
+                            )
+                        else:
+                            selected_org = "All"
+
+                    # Filter data based on selection
+                    if drill_level == "Project" and selected_org != "All":
+                        plot_df = treemap_df[treemap_df[org_col] == selected_org].copy()
+                        if len(plot_df) == 0:
+                            st.warning(f"No projects found for {selected_org}")
+                            plot_df = treemap_df.copy()
+                    else:
+                        plot_df = treemap_df.copy()
+
+                    # Create treemap based on selected level
+                    if drill_level == "Organization":
+                        # Aggregate by organization
+                        org_summary = plot_df.groupby(org_col).agg({
+                            'Budget': 'sum',
+                            'Project Name': 'count'
+                        }).reset_index()
+                        org_summary = org_summary.rename(columns={'Project Name': 'Project_Count'})
+
+                        # Create organization-level treemap
+                        fig_treemap = px.treemap(
+                            org_summary,
+                            path=[org_col],
+                            values='Budget',
+                            color=org_col,
+                            title=f"Portfolio Treemap - Organization Level ({len(org_summary)} organizations, {len(plot_df)} projects)",
+                            hover_data={'Project_Count': True},
+                            labels={
+                                'Budget': f'Total Budget ({currency_symbol})',
+                                'Project_Count': 'Project Count'
+                            }
+                        )
+
+                        # Update hover template for organizations
+                        fig_treemap.update_traces(
+                            hovertemplate='<b>%{label}</b><br>' +
+                                        f'Budget: {currency_symbol}%{{value:,.0f}}<br>' +
+                                        'Projects: %{customdata[0]}<br>' +
+                                        '<extra></extra>'
+                        )
+
+                    else:  # Project level
+                        # Project-level treemap with tier colors
+                        if len(plot_df) > 0:
+                            fig_treemap = px.treemap(
+                                plot_df,
+                                path=[org_col, 'Project Name'],
+                                values='Budget',
+                                color='tier_names',
+                                title=f"Portfolio Treemap - Project Level ({selected_org if selected_org != 'All' else 'All Organizations'}, {len(plot_df)} projects)",
+                                hover_data={
+                                    'Budget': ':,.0f',
+                                    'CPI': ':.3f' if 'CPI' in plot_df.columns else False,
+                                    'SPI': ':.3f' if 'SPI' in plot_df.columns else False
+                                },
+                                labels={
+                                    'Budget': f'Budget ({currency_symbol})',
+                                    'tier_names': 'Budget Tier'
+                                }
+                            )
+
+                            # Update hover template for projects
+                            hover_template = '<b>%{label}</b><br>' + f'Budget: {currency_symbol}%{{value:,.0f}}<br>'
+                            if 'CPI' in plot_df.columns:
+                                hover_template += 'CPI: %{customdata[1]:.3f}<br>'
+                            if 'SPI' in plot_df.columns:
+                                hover_template += 'SPI: %{customdata[2] if len(customdata) > 2 else "N/A"}<br>'
+                            hover_template += '<extra></extra>'
+
+                            fig_treemap.update_traces(hovertemplate=hover_template)
+
+                    # Update layout for better appearance
+                    fig_treemap.update_layout(
+                        height=600,
+                        font_size=12,
+                        margin=dict(t=80, l=10, r=10, b=10)
+                    )
+
+                    # Display the treemap
+                    st.plotly_chart(fig_treemap, use_container_width=True)
+
+                    # Add explanatory text
+                    if drill_level == "Organization":
+                        st.markdown("""
+                        **📊 How to Read This Treemap:**
+                        - **Size**: Represents total budget for each organization
+                        - **Color**: Different colors for each organization
+                        - **Hover**: Shows organization name, total budget, and project count
+                        - **Click**: Switch to "Project" view above to drill down into specific organizations
+                        """)
+                    else:
+                        st.markdown(f"""
+                        **📊 How to Read This Treemap:**
+                        - **Size**: Represents budget for each project
+                        - **Color**: Shows budget tier (tier_names) for each project
+                        - **Hierarchy**: Projects are grouped by organization
+                        - **Hover**: Shows project details including budget, CPI, and SPI
+                        - **Filter**: Use the organization dropdown above to focus on specific organizations
+                        {f"- **Current View**: Showing {selected_org}" if selected_org != "All" else "- **Current View**: Showing all organizations"}
+                        """)
+
+                else:
+                    st.warning("Treemap requires Organization, Project Name, and Budget columns.")
+            else:
+                st.info("No data available for treemap visualization.")
 
         # Summary statistics for filtered data
         if len(filtered_df) > 0:
