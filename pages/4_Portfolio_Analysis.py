@@ -1459,40 +1459,52 @@ def main():
         # Portfolio Time/Budget Performance Curve (Filtered)
         with st.expander("📈 Portfolio Performance Curve (Filtered)", expanded=True):
             if len(filtered_df) > 0 and 'CPI' in filtered_df.columns and 'SPI' in filtered_df.columns and 'Budget' in filtered_df.columns:
-                # Create fixed BAC-based tier ranges
+                # Get tier configuration from session state
+                tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+
+                # Default tier configuration if not set
+                default_tier_config = {
+                    'cutoff_points': [4000, 8000, 15000],
+                    'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+                    'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']  # Blue, Green, Orange, Red
+                }
+
+                # Use saved config or defaults
+                cutoffs = tier_config.get('cutoff_points', default_tier_config['cutoff_points'])
+                tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+                tier_colors = tier_config.get('colors', default_tier_config['colors'])
+
+                # Create configurable BAC-based tier ranges
                 budget_values = filtered_df['Budget'].dropna()
                 if len(budget_values) > 0:
                     def get_budget_category(budget):
                         if pd.isna(budget):
                             return "Unknown"
-                        elif budget >= 15000:
-                            return f"Tier 5: Strategic (≥ {currency_symbol}15,000)"
-                        elif budget >= 8500:
-                            return f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)"
-                        elif budget >= 6000:
-                            return f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)"
-                        elif budget >= 4000:
-                            return f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)"
-                        else:
-                            return f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+                        elif budget >= cutoffs[2]:  # Tier 4 (highest)
+                            return f"{tier_names[3]}: (≥ {currency_symbol}{cutoffs[2]:,.0f})"
+                        elif budget >= cutoffs[1]:  # Tier 3
+                            return f"{tier_names[2]}: ({currency_symbol}{cutoffs[1]:,.0f} - {currency_symbol}{cutoffs[2]:,.0f})"
+                        elif budget >= cutoffs[0]:  # Tier 2
+                            return f"{tier_names[1]}: ({currency_symbol}{cutoffs[0]:,.0f} - {currency_symbol}{cutoffs[1]:,.0f})"
+                        else:  # Tier 1 (lowest)
+                            return f"{tier_names[0]}: (< {currency_symbol}{cutoffs[0]:,.0f})"
 
                     # Add budget category to filtered dataframe
                     df_scatter = filtered_df.copy()
                     df_scatter['Budget_Range'] = df_scatter['Budget'].apply(get_budget_category)
 
-                    # Define the desired order for the legend (Tier 5 to Tier 1)
+                    # Define the tier order (Tier 4 to Tier 1 for legend display)
                     tier_order = [
-                        f"Tier 5: Strategic (≥ {currency_symbol}15,000)",
-                        f"Tier 4: Major ({currency_symbol}8,500 - {currency_symbol}15,000)",
-                        f"Tier 3: Large-Scale ({currency_symbol}6,000 - {currency_symbol}8,500)",
-                        f"Tier 2: Mid-Range ({currency_symbol}4,000 - {currency_symbol}6,000)",
-                        f"Tier 1: Small-Scale (< {currency_symbol}4,000)"
+                        f"{tier_names[3]}: (≥ {currency_symbol}{cutoffs[2]:,.0f})",      # Tier 4
+                        f"{tier_names[2]}: ({currency_symbol}{cutoffs[1]:,.0f} - {currency_symbol}{cutoffs[2]:,.0f})",  # Tier 3
+                        f"{tier_names[1]}: ({currency_symbol}{cutoffs[0]:,.0f} - {currency_symbol}{cutoffs[1]:,.0f})",  # Tier 2
+                        f"{tier_names[0]}: (< {currency_symbol}{cutoffs[0]:,.0f})"       # Tier 1
                     ]
 
                     # Convert Budget_Range to categorical with specific order
                     df_scatter['Budget_Range'] = pd.Categorical(df_scatter['Budget_Range'], categories=tier_order, ordered=True)
 
-                    # Create scatter plot with consistent dot sizes and explicit ordering
+                    # Create scatter plot with configurable colors (Tier 4 to Tier 1 order)
                     fig_performance = px.scatter(
                         df_scatter,
                         x='SPI',
@@ -1505,7 +1517,7 @@ def main():
                             'CPI': 'Cost Performance Index (CPI)',
                             'Budget_Range': 'Budget Range'
                         },
-                        color_discrete_sequence=['#e74c3c', '#f39c12', '#f1c40f', '#27ae60', '#3498db'],
+                        color_discrete_sequence=[tier_colors[3], tier_colors[2], tier_colors[1], tier_colors[0]],  # Tier 4 to Tier 1
                         category_orders={'Budget_Range': tier_order}
                     )
 
@@ -1568,20 +1580,14 @@ def main():
                         critical_count = len(df_scatter[df_scatter['Health_Category'] == 'Critical']) if 'Health_Category' in df_scatter.columns else 0
                         st.metric("🚨 Critical Projects", critical_count)
 
-                    # Add interpretation guide
                     st.markdown(f"""
                     **📊 How to Read This Chart:**
                     - **X-axis (SPI):** Schedule Performance - Right is better (ahead of schedule)
                     - **Y-axis (CPI):** Cost Performance - Up is better (under budget)
-                    - **Dot Colors:** Project tiers by budget:
-                      - 🔴 **Tier 5:** Strategic (≥ {currency_symbol}15K{currency_postfix})
-                      - 🟠 **Tier 4:** Major ({currency_symbol}8.5K{currency_postfix} - {currency_symbol}15K{currency_postfix})
-                      - 🟡 **Tier 3:** Large-Scale ({currency_symbol}6K{currency_postfix} - {currency_symbol}8.5K{currency_postfix})
-                      - 🟢 **Tier 2:** Mid-Range ({currency_symbol}4K{currency_postfix} - {currency_symbol}6K{currency_postfix})
-                      - 🔵 **Tier 1:** Small-Scale (< {currency_symbol}4K{currency_postfix})
                     - **Target Zone:** Upper right quadrant (SPI > 1.0, CPI > 1.0)
                     - **Hover:** Click any dot to see project name and budget details
                     - **Chart updates automatically** based on your filter selections above
+                    - **Tier Configuration:** Update tiers in File Management → Controls → Budget Tier Configuration
                     """)
                 else:
                     st.info("No budget data available for performance curve.")
@@ -2010,7 +2016,7 @@ def main():
 
                                         if pd.notna(start_date):
                                             # Always use BAC (Budget) for both scenarios
-                                            budget = row.get('Budget', 0)  # BAC
+                                            budget = row.get('bac', row.get('Budget', 0))  # Try 'bac' first, then 'Budget'
 
                                             if scenario_type == "Plan":
                                                 # Use Original Duration (OD)
@@ -2018,7 +2024,7 @@ def main():
                                                     duration_months = max(1, row['original_duration_months'])
                                                 else:
                                                     # Fallback: calculate from plan start to plan finish
-                                                    plan_finish = row.get('Plan Finish')
+                                                    plan_finish = row.get('plan_finish', row.get('Plan Finish'))
                                                     if pd.notna(plan_finish):
                                                         plan_finish_date = pd.to_datetime(plan_finish, errors='coerce')
                                                         if pd.notna(plan_finish_date):
@@ -2029,14 +2035,14 @@ def main():
                                                         continue
                                             else:  # Predicted
                                                 # Use Likely Duration (LD) with cap check
-                                                if 'forecast_duration' in row and pd.notna(row.get('forecast_duration')):
-                                                    ld = row['forecast_duration']
+                                                if 'likely_duration' in row and pd.notna(row.get('likely_duration')):
+                                                    ld = row['likely_duration']
                                                     # Get OD for cap calculation
                                                     if 'original_duration_months' in row and pd.notna(row.get('original_duration_months')):
                                                         od = row['original_duration_months']
                                                     else:
                                                         # Fallback: calculate OD from plan dates
-                                                        plan_finish = row.get('Plan Finish')
+                                                        plan_finish = row.get('plan_finish', row.get('Plan Finish'))
                                                         if pd.notna(plan_finish):
                                                             plan_finish_date = pd.to_datetime(plan_finish, errors='coerce')
                                                             if pd.notna(plan_finish_date):
@@ -2064,7 +2070,7 @@ def main():
                                                     cash_flow_data.append({
                                                         'Period': period_key,
                                                         'Cash_Flow': monthly_cash_flow,
-                                                        'Project': row.get('Project Name', 'Unknown'),
+                                                        'Project': row.get('project_name', row.get('Project Name', 'Unknown')),
                                                         'Date': current_date,
                                                         'Scenario': scenario_type
                                                     })

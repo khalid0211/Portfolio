@@ -502,6 +502,143 @@ def render_controls_section():
         key="inflation_rate"
     )
 
+    # Budget Tier Configuration
+    st.markdown("---")
+    st.markdown("### 🎯 Budget Tier Configuration")
+
+    # Get saved tier config or set defaults
+    saved_tier_config = saved_controls.get('tier_config', {})
+    default_cutoffs = saved_tier_config.get('cutoff_points', [4000, 8000, 15000])
+    default_names = saved_tier_config.get('tier_names', ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'])
+
+    # Auto-calculate button
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("**Automatic Tier Calculation**")
+        st.caption("Calculate tiers based on your data's BAC range")
+    with col2:
+        if st.button("📊 Calculate from Data", key="auto_calc_tiers"):
+            if st.session_state.data_df is not None and not st.session_state.data_df.empty:
+                df = st.session_state.data_df
+                # Try different BAC column names
+                bac_col = None
+                for col_name in ['BAC', 'bac', 'Budget', 'budget']:
+                    if col_name in df.columns:
+                        bac_col = col_name
+                        break
+
+                if bac_col and not df[bac_col].dropna().empty:
+                    bac_values = pd.to_numeric(df[bac_col], errors='coerce').dropna()
+                    if len(bac_values) > 0:
+                        min_bac = float(bac_values.min())
+                        max_bac = float(bac_values.max())
+                        range_size = (max_bac - min_bac) / 4
+
+                        # Update the cutoff values
+                        new_cutoffs = [
+                            min_bac + range_size,      # Cutoff 1 (between Tier 1 & 2)
+                            min_bac + 2 * range_size,  # Cutoff 2 (between Tier 2 & 3)
+                            min_bac + 3 * range_size   # Cutoff 3 (between Tier 3 & 4)
+                        ]
+
+                        # Store in session state for immediate update
+                        st.session_state.auto_calculated_cutoffs = new_cutoffs
+                        st.success(f"✅ Calculated tiers from {len(bac_values)} projects (Range: {currency_symbol}{min_bac:,.0f} - {currency_symbol}{max_bac:,.0f})")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ No valid BAC values found in data")
+                else:
+                    st.warning("⚠️ No BAC/Budget column found in data")
+            else:
+                st.warning("⚠️ No data loaded. Load data first to auto-calculate tiers.")
+
+    # Use auto-calculated cutoffs if available
+    if hasattr(st.session_state, 'auto_calculated_cutoffs'):
+        default_cutoffs = st.session_state.auto_calculated_cutoffs
+        # Clear the auto-calculated values after using them
+        delattr(st.session_state, 'auto_calculated_cutoffs')
+
+    # Manual tier configuration
+    st.markdown("**Manual Tier Configuration**")
+
+    # Cutoff points
+    st.markdown("**Cutoff Points**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        cutoff1 = st.number_input(
+            f"Cutoff 1 ({currency_symbol})",
+            min_value=0.0,
+            value=float(default_cutoffs[0]),
+            step=1000.0,
+            key="tier_cutoff1",
+            help="Boundary between Tier 1 and Tier 2"
+        )
+    with col2:
+        cutoff2 = st.number_input(
+            f"Cutoff 2 ({currency_symbol})",
+            min_value=cutoff1,
+            value=float(default_cutoffs[1]),
+            step=1000.0,
+            key="tier_cutoff2",
+            help="Boundary between Tier 2 and Tier 3"
+        )
+    with col3:
+        cutoff3 = st.number_input(
+            f"Cutoff 3 ({currency_symbol})",
+            min_value=cutoff2,
+            value=float(default_cutoffs[2]),
+            step=1000.0,
+            key="tier_cutoff3",
+            help="Boundary between Tier 3 and Tier 4"
+        )
+
+    # Tier names
+    st.markdown("**Tier Names**")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        tier1_name = st.text_input(
+            "Tier 1 Name",
+            value=default_names[0],
+            key="tier1_name",
+            help=f"Projects < {currency_symbol}{cutoff1:,.0f}"
+        )
+    with col2:
+        tier2_name = st.text_input(
+            "Tier 2 Name",
+            value=default_names[1],
+            key="tier2_name",
+            help=f"Projects {currency_symbol}{cutoff1:,.0f} - {currency_symbol}{cutoff2:,.0f}"
+        )
+    with col3:
+        tier3_name = st.text_input(
+            "Tier 3 Name",
+            value=default_names[2],
+            key="tier3_name",
+            help=f"Projects {currency_symbol}{cutoff2:,.0f} - {currency_symbol}{cutoff3:,.0f}"
+        )
+    with col4:
+        tier4_name = st.text_input(
+            "Tier 4 Name",
+            value=default_names[3],
+            key="tier4_name",
+            help=f"Projects ≥ {currency_symbol}{cutoff3:,.0f}"
+        )
+
+    # Preview of tier configuration
+    with st.expander("🔍 Tier Preview"):
+        st.markdown("**Current Tier Configuration:**")
+        st.markdown(f"🔵 **{tier1_name}**: < {currency_symbol}{cutoff1:,.0f}")
+        st.markdown(f"🟢 **{tier2_name}**: {currency_symbol}{cutoff1:,.0f} - {currency_symbol}{cutoff2:,.0f}")
+        st.markdown(f"🟠 **{tier3_name}**: {currency_symbol}{cutoff2:,.0f} - {currency_symbol}{cutoff3:,.0f}")
+        st.markdown(f"🔴 **{tier4_name}**: ≥ {currency_symbol}{cutoff3:,.0f}")
+
+    # Store tier configuration
+    tier_config = {
+        'cutoff_points': [cutoff1, cutoff2, cutoff3],
+        'tier_names': [tier1_name, tier2_name, tier3_name, tier4_name],
+        'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']  # Blue, Green, Orange, Red
+    }
+
     # Store controls in session state
     controls = {
         'curve_type': curve_type.lower(),
@@ -511,14 +648,12 @@ def render_controls_section():
         'currency_postfix': currency_postfix,
         'date_format': date_format,
         'data_date': data_date.strftime('%Y-%m-%d'),
-        'inflation_rate': inflation_rate
+        'inflation_rate': inflation_rate,
+        'tier_config': tier_config
     }
 
     st.session_state.config_dict['controls'] = controls
 
-    # Debug: Show what's being stored
-    with st.expander("🔍 Debug: Current Controls Values"):
-        st.json(controls)
     st.markdown('</div>', unsafe_allow_html=True)
     return controls
 
@@ -583,36 +718,23 @@ def render_batch_calculation_section():
                 data_date = pd.to_datetime(controls.get('data_date', '2024-01-01')).date()
                 inflation_rate = float(controls.get('inflation_rate', 0.0))
 
-                # Actually run the REAL batch calculation using the same function as Project Analysis
+                # Run batch EVM calculations using the centralized EVM engine
                 with st.spinner("⚡ Running comprehensive EVM batch calculations..."):
 
-                    # Call the real batch calculation function
-                    # We'll handle the import dynamically to avoid circular imports
-                    import sys
-                    import os
-                    sys.path.append(os.path.dirname(__file__))
-
                     try:
-                        # Import and run the real batch calculation
-                        from pathlib import Path
-                        import importlib.util
+                        # Import the EVM engine directly
+                        from core.evm_engine import perform_batch_calculation
 
-                        # Load the Project Analysis module dynamically
-                        project_analysis_path = Path(__file__).parent / "3_Project_Analysis.py"
-                        spec = importlib.util.spec_from_file_location("project_analysis", project_analysis_path)
-                        project_analysis = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(project_analysis)
-
-                        # Use the real perform_batch_calculation function
-                        batch_results = project_analysis.perform_batch_calculation(
+                        # Use the EVM engine for batch calculation
+                        batch_results = perform_batch_calculation(
                             st.session_state.data_df, column_mapping,
                             curve_type, alpha, beta, data_date, inflation_rate
                         )
 
-                        st.success(f"✅ Real EVM calculations completed for {len(batch_results)} projects!")
+                        st.success(f"✅ EVM calculations completed for {len(batch_results)} projects!")
 
                     except Exception as import_error:
-                        st.warning(f"⚠️ Could not import real batch calculation: {import_error}")
+                        st.warning(f"⚠️ Could not import EVM engine: {import_error}")
                         st.info("Using simplified calculation as fallback...")
 
                         # Fallback to simplified calculation if import fails

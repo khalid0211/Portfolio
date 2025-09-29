@@ -35,6 +35,17 @@ except ImportError:
 import streamlit as st
 from dateutil import parser as date_parser
 
+# Import EVM functions from centralized engine
+from core.evm_engine import (
+    perform_complete_evm_analysis,
+    perform_batch_calculation,
+    calculate_evm_metrics,
+    parse_date_any,
+    safe_divide,
+    validate_numeric_input,
+    is_valid_finite_number
+)
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================

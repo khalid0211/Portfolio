@@ -42,6 +42,7 @@ st.markdown("""
 COLOR_MAP = {
     "Progress": "#40b57b",  # lighter green
     "Planned": "#4389d1",   # lighter blue
+    "Predicted": "#6366f1", # purple for predicted completion
     "Overrun": "#d55454"    # lighter red
 }
 
@@ -77,7 +78,26 @@ def load_portfolio_dataframe() -> pd.DataFrame | None:
 
 
 def _coerce_datetime(series: pd.Series) -> pd.Series:
-    return pd.to_datetime(series, errors="coerce")
+    """Convert series to datetime with proper handling of different formats."""
+    # First try standard conversion
+    converted = pd.to_datetime(series, errors="coerce")
+
+    # For any that failed, try specific date formats that EVM engine uses
+    mask = pd.isna(converted) & pd.notna(series)
+    if mask.any():
+        # Try the EVM engine format: 'dd/mm/yyyy'
+        for idx in series[mask].index:
+            try:
+                if isinstance(series[idx], str) and series[idx].strip():
+                    # Try specific format used by EVM engine
+                    converted.loc[idx] = pd.to_datetime(series[idx], format='%d/%m/%Y', errors='coerce')
+                    if pd.isna(converted.loc[idx]):
+                        # Try other common formats
+                        converted.loc[idx] = pd.to_datetime(series[idx], format='%Y-%m-%d', errors='coerce')
+            except:
+                continue
+
+    return converted
 
 
 def _coerce_numeric(series: pd.Series) -> pd.Series:
@@ -116,7 +136,7 @@ def format_currency(amount: float, symbol: str, postfix: str = "", decimals: int
 
 
 
-def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
+def apply_filters(df: pd.DataFrame, start_col: str = None, finish_col: str = None) -> tuple[pd.DataFrame, bool, str]:
     """Render filter widgets and return the filtered DataFrame with control values."""
     organizations = sorted({str(org) for org in df.get("organization", pd.Series()).dropna() if str(org).strip()})
 
@@ -128,10 +148,10 @@ def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
     min_od = float(numeric_od.min()) if not numeric_od.empty else 0.0
     max_od = float(numeric_od.max()) if not numeric_od.empty else min_od
 
-    min_start = df["plan_start"].min() if "plan_start" in df.columns else pd.NaT
-    max_start = df["plan_start"].max() if "plan_start" in df.columns else pd.NaT
-    min_finish = df["plan_finish"].min() if "plan_finish" in df.columns else pd.NaT
-    max_finish = df["plan_finish"].max() if "plan_finish" in df.columns else pd.NaT
+    min_start = df[start_col].min() if start_col and start_col in df.columns else pd.NaT
+    max_start = df[start_col].max() if start_col and start_col in df.columns else pd.NaT
+    min_finish = df[finish_col].min() if finish_col and finish_col in df.columns else pd.NaT
+    max_finish = df[finish_col].max() if finish_col and finish_col in df.columns else pd.NaT
 
     st.markdown("### 🔍 Filters")
 
@@ -271,22 +291,22 @@ def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
         filtered = filtered[filtered["organization"].isin(org_selection)]
 
     # Plan Start date filters
-    if plan_start_later_value is not None:
+    if plan_start_later_value is not None and start_col:
         plan_start_later_dt = pd.to_datetime(plan_start_later_value)
-        filtered = filtered[filtered["plan_start"] >= plan_start_later_dt]
+        filtered = filtered[filtered[start_col] >= plan_start_later_dt]
 
-    if plan_start_earlier_value is not None:
+    if plan_start_earlier_value is not None and start_col:
         plan_start_earlier_dt = pd.to_datetime(plan_start_earlier_value)
-        filtered = filtered[filtered["plan_start"] <= plan_start_earlier_dt]
+        filtered = filtered[filtered[start_col] <= plan_start_earlier_dt]
 
     # Plan Finish date filters
-    if plan_finish_later_value is not None:
+    if plan_finish_later_value is not None and finish_col:
         plan_finish_later_dt = pd.to_datetime(plan_finish_later_value)
-        filtered = filtered[filtered["plan_finish"] >= plan_finish_later_dt]
+        filtered = filtered[filtered[finish_col] >= plan_finish_later_dt]
 
-    if plan_finish_earlier_value is not None:
+    if plan_finish_earlier_value is not None and finish_col:
         plan_finish_earlier_dt = pd.to_datetime(plan_finish_earlier_value)
-        filtered = filtered[filtered["plan_finish"] <= plan_finish_earlier_dt]
+        filtered = filtered[filtered[finish_col] <= plan_finish_earlier_dt]
 
     # Original Duration filters
     if "original_duration_months" in filtered.columns:
@@ -309,17 +329,17 @@ def apply_filters(df: pd.DataFrame) -> tuple[pd.DataFrame, bool, str]:
 def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
     segments: List[Dict] = []
     for _, row in df.iterrows():
-        start = row.get("plan_start")
-        finish = row.get("plan_finish")
+        start = row.get("plan_start", row.get("Plan Start"))
+        finish = row.get("plan_finish", row.get("Plan Finish"))
         if pd.isna(start) or pd.isna(finish):
             continue
 
-        project_id = str(row.get("project_id", "")) or "Unknown"
-        project_name = row.get("project_name", "")
-        organization = row.get("organization", "")
+        project_id = str(row.get("project_id", row.get("Project ID", ""))) or "Unknown"
+        project_name = row.get("project_name", row.get("Project Name", ""))
+        organization = row.get("organization", row.get("Organization", ""))
 
-        bac = row.get("bac", 0.0)
-        ac = row.get("ac", 0.0)
+        bac = row.get("bac", row.get("BAC", 0.0))
+        ac = row.get("ac", row.get("AC", 0.0))
         earned_value = row.get("earned_value", 0.0)
         cpi = row.get("cost_performance_index", 0.0)
         spi = row.get("schedule_performance_index", 0.0)
@@ -377,48 +397,103 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
             "percent_work_completed": percent_work_completed
         })
 
-        if progress_end < finish:
-            segments.append({
-                "Task": project_id,
-                "Start": progress_end,
-                "Finish": finish,
-                "Segment": "Planned",
-                "project_name": project_name,
-                "organization": organization,
-                "bac_formatted": bac_formatted,
-                "plan_start": plan_start_str,
-                "plan_finish": plan_finish_str,
-                "cpi": cpi,
-                "spi": spi,
-                "percent_budget_used": percent_budget_used,
-                "percent_time_used": percent_time_used,
-                "percent_work_completed": percent_work_completed
-            })
+        # Handle the remaining timeline based on view mode (Plan vs Predicted)
+        forecast_finish = row.get("likely_completion", row.get("forecast_completion"))
 
-        forecast_finish = row.get("forecast_completion")
-        if show_predicted and pd.notna(forecast_finish) and forecast_finish > finish:
-            segments.append({
-                "Task": project_id,
-                "Start": finish,
-                "Finish": forecast_finish,
-                "Segment": "Overrun",
-                "project_name": project_name,
-                "organization": organization,
-                "bac_formatted": bac_formatted,
-                "plan_start": plan_start_str,
-                "plan_finish": plan_finish_str,
-                "cpi": cpi,
-                "spi": spi,
-                "percent_budget_used": percent_budget_used,
-                "percent_time_used": percent_time_used,
-                "percent_work_completed": percent_work_completed
-            })
+        if show_predicted and pd.notna(forecast_finish):
+            # Convert forecast_finish to datetime if it's a string
+            if isinstance(forecast_finish, str):
+                try:
+                    # Try parsing different date formats
+                    forecast_finish_dt = pd.to_datetime(forecast_finish, format='%d/%m/%Y', errors='coerce')
+                    if pd.isna(forecast_finish_dt):
+                        forecast_finish_dt = pd.to_datetime(forecast_finish, errors='coerce')
+                    forecast_finish = forecast_finish_dt
+                except:
+                    forecast_finish = pd.NaT
+
+            if pd.notna(forecast_finish) and progress_end < forecast_finish:
+                # Predicted View: Show predicted completion
+                if forecast_finish > finish:
+                    # Predicted completion is later than planned (overrun)
+                    segments.append({
+                        "Task": project_id,
+                        "Start": progress_end,
+                        "Finish": finish,
+                        "Segment": "Planned",
+                        "project_name": project_name,
+                        "organization": organization,
+                        "bac_formatted": bac_formatted,
+                        "plan_start": plan_start_str,
+                        "plan_finish": plan_finish_str,
+                        "cpi": cpi,
+                        "spi": spi,
+                        "percent_budget_used": percent_budget_used,
+                        "percent_time_used": percent_time_used,
+                        "percent_work_completed": percent_work_completed
+                    })
+                    segments.append({
+                        "Task": project_id,
+                        "Start": finish,
+                        "Finish": forecast_finish,
+                        "Segment": "Overrun",
+                        "project_name": project_name,
+                        "organization": organization,
+                        "bac_formatted": bac_formatted,
+                        "plan_start": plan_start_str,
+                        "plan_finish": plan_finish_str,
+                        "cpi": cpi,
+                        "spi": spi,
+                        "percent_budget_used": percent_budget_used,
+                        "percent_time_used": percent_time_used,
+                        "percent_work_completed": percent_work_completed
+                    })
+                else:
+                    # Predicted completion is earlier than or same as planned
+                    segments.append({
+                        "Task": project_id,
+                        "Start": progress_end,
+                        "Finish": forecast_finish,
+                        "Segment": "Predicted",
+                        "project_name": project_name,
+                        "organization": organization,
+                        "bac_formatted": bac_formatted,
+                        "plan_start": plan_start_str,
+                        "plan_finish": plan_finish_str,
+                        "cpi": cpi,
+                        "spi": spi,
+                        "percent_budget_used": percent_budget_used,
+                        "percent_time_used": percent_time_used,
+                        "percent_work_completed": percent_work_completed
+                    })
+        else:
+            # Plan View: Show planned completion
+            if progress_end < finish:
+                segments.append({
+                    "Task": project_id,
+                    "Start": progress_end,
+                    "Finish": finish,
+                    "Segment": "Planned",
+                    "project_name": project_name,
+                    "organization": organization,
+                    "bac_formatted": bac_formatted,
+                    "plan_start": plan_start_str,
+                    "plan_finish": plan_finish_str,
+                    "cpi": cpi,
+                    "spi": spi,
+                    "percent_budget_used": percent_budget_used,
+                    "percent_time_used": percent_time_used,
+                    "percent_work_completed": percent_work_completed
+                })
 
     return segments
 
 
-def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str) -> None:
-    if "plan_start" in df.columns:
+def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str, start_col: str = None) -> None:
+    # Sort by start date if column is available
+    if start_col and start_col in df.columns:
+        df = df.sort_values(start_col).reset_index(drop=True)
+    elif "plan_start" in df.columns:
         df = df.sort_values("plan_start").reset_index(drop=True)
     segments = build_segments(df, show_predicted)
     if not segments:
@@ -427,9 +502,9 @@ def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str) -> 
 
     seg_df = pd.DataFrame(segments).sort_values(by=["Start", "Finish", "Segment"])
 
-    if "project_id" in df.columns:
-        project_order_df = df[["project_id", "plan_start"]].dropna(subset=["plan_start"]).copy()
-        project_order_df = project_order_df.sort_values("plan_start", kind="mergesort")
+    if "project_id" in df.columns and start_col:
+        project_order_df = df[["project_id", start_col]].dropna(subset=[start_col]).copy()
+        project_order_df = project_order_df.sort_values(start_col, kind="mergesort")
         category_order = project_order_df["project_id"].astype(str).tolist()
     else:
         task_order = (
@@ -474,22 +549,67 @@ def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str) -> 
 
     period_meta = PERIOD_OPTIONS.get(period_choice, PERIOD_OPTIONS["Month"])
 
-    min_start = seg_df["Start"].min()
-    max_finish = seg_df["Finish"].max()
-    if pd.notna(min_start):
-        axis_range_start = (pd.Timestamp(min_start) - pd.DateOffset(months=3)).normalize()
+    # Calculate min/max from segment data for end range
+    valid_segment_finishes = seg_df["Finish"].dropna()
+    if not valid_segment_finishes.empty:
+        max_finish = valid_segment_finishes.max()
+        # Validate the max finish date is reasonable
+        try:
+            max_finish_ts = pd.Timestamp(max_finish)
+            if max_finish_ts.year < 1980:  # Invalid date
+                max_finish = pd.NaT
+        except (ValueError, TypeError, pd.errors.OutOfBoundsDatetime):
+            max_finish = pd.NaT
     else:
-        axis_range_start = min_start
-    axis_range_end = max_finish
-    timeline_end = pd.NaT
+        max_finish = pd.NaT
+
+    # Calculate earliest plan start from original dataframe (not segments)
+    earliest_plan_start = None
+    if start_col and start_col in df.columns:
+        # Get valid dates only (remove NaT values)
+        valid_start_dates = df[start_col].dropna()
+        if not valid_start_dates.empty:
+            earliest_plan_start = valid_start_dates.min()
+
+    # Fallback to segments if no valid start dates found
+    if pd.isna(earliest_plan_start) or earliest_plan_start is None:
+        valid_segment_starts = seg_df["Start"].dropna()
+        if not valid_segment_starts.empty:
+            earliest_plan_start = valid_segment_starts.min()
+
+    # Timeline should start 1 quarter (3 months) before earliest plan start
+    if pd.notna(earliest_plan_start) and earliest_plan_start is not None:
+        try:
+            # Ensure we have a valid timestamp
+            earliest_plan_start_ts = pd.Timestamp(earliest_plan_start)
+            # Check if the timestamp is reasonable (not epoch time)
+            if earliest_plan_start_ts.year > 1980:  # Reasonable check for valid dates
+                axis_range_start = (earliest_plan_start_ts - pd.DateOffset(months=3)).normalize()
+            else:
+                # Fallback to current date if we get unreasonable dates
+                axis_range_start = (pd.Timestamp.now() - pd.DateOffset(months=3)).normalize()
+        except (ValueError, TypeError, pd.errors.OutOfBoundsDatetime):
+            # Fallback to current date if conversion fails
+            axis_range_start = (pd.Timestamp.now() - pd.DateOffset(months=3)).normalize()
+    else:
+        # Ultimate fallback
+        axis_range_start = (pd.Timestamp.now() - pd.DateOffset(months=3)).normalize()
+    # Calculate end range with validation
     if pd.notna(max_finish):
-        timeline_end = pd.Timestamp(max_finish)
-        axis_range_end = timeline_end + period_meta["delta"]
-        year_end_candidate = timeline_end.to_period('Y').end_time
-        if year_end_candidate > axis_range_end:
-            axis_range_end = year_end_candidate
-        axis_range_end = pd.Timestamp(axis_range_end)
-        axis_range_end = axis_range_end.normalize() + pd.Timedelta(days=1)
+        try:
+            timeline_end = pd.Timestamp(max_finish)
+            axis_range_end = timeline_end + period_meta["delta"]
+            year_end_candidate = timeline_end.to_period('Y').end_time
+            if year_end_candidate > axis_range_end:
+                axis_range_end = year_end_candidate
+            axis_range_end = pd.Timestamp(axis_range_end)
+            axis_range_end = axis_range_end.normalize() + pd.Timedelta(days=1)
+        except (ValueError, TypeError, pd.errors.OutOfBoundsDatetime):
+            # Fallback to a reasonable end date
+            axis_range_end = (pd.Timestamp.now() + pd.DateOffset(months=12)).normalize()
+    else:
+        # Ultimate fallback for end date
+        axis_range_end = (pd.Timestamp.now() + pd.DateOffset(months=12)).normalize()
     fig.update_xaxes(
         type="date",
         dtick=period_meta["dtick"],
@@ -629,23 +749,54 @@ def main():
         render_footer()
         return
 
-    for col in ["plan_start", "plan_finish", "data_date", "forecast_completion"]:
+    # Detect available column names and coerce data types
+    date_cols_to_check = ["plan_start", "plan_finish", "Plan Start", "Plan Finish", "data_date", "forecast_completion", "likely_completion"]
+    for col in date_cols_to_check:
         if col in df.columns:
             df[col] = _coerce_datetime(df[col])
-    for col in ["bac", "ac", "earned_value", "original_duration_months", "actual_duration_months", "cost_performance_index", "schedule_performance_index"]:
+
+    numeric_cols_to_check = ["bac", "BAC", "ac", "AC", "earned_value", "original_duration_months", "actual_duration_months", "cost_performance_index", "schedule_performance_index"]
+    for col in numeric_cols_to_check:
         if col in df.columns:
             df[col] = _coerce_numeric(df[col])
 
-    df = df.dropna(subset=["plan_start", "plan_finish"])
-    if df.empty:
-        st.warning("Project records are missing plan dates. Please verify the source data.")
+    # Find the correct start and finish date columns
+    start_col = None
+    if "plan_start" in df.columns:
+        start_col = "plan_start"
+    elif "Plan Start" in df.columns:
+        start_col = "Plan Start"
+
+    finish_col = None
+    if "plan_finish" in df.columns:
+        finish_col = "plan_finish"
+    elif "Plan Finish" in df.columns:
+        finish_col = "Plan Finish"
+
+    if not start_col or not finish_col:
+        st.warning("Project records are missing plan date columns. Please verify the source data.")
         render_footer()
         return
 
-    filtered_df, show_predicted, period_choice = apply_filters(df)
+    # Filter out rows with missing or invalid dates
+    df = df.dropna(subset=[start_col, finish_col])
+
+    # Additional validation: remove rows with unreasonable dates (like epoch dates)
+    if not df.empty:
+        # Filter out dates before 1980 (likely invalid/epoch dates)
+        valid_start_mask = df[start_col].apply(lambda x: pd.notna(x) and pd.Timestamp(x).year > 1980 if pd.notna(x) else False)
+        valid_finish_mask = df[finish_col].apply(lambda x: pd.notna(x) and pd.Timestamp(x).year > 1980 if pd.notna(x) else False)
+        df = df[valid_start_mask & valid_finish_mask]
+
+    if df.empty:
+        st.warning("Project records are missing valid plan dates. Please verify the source data.")
+        render_footer()
+        return
+
+    filtered_df, show_predicted, period_choice = apply_filters(df, start_col, finish_col)
 
     st.markdown(f"**Projects Displayed:** {len(filtered_df)}")
-    render_gantt(filtered_df, show_predicted, period_choice)
+    render_gantt(filtered_df, show_predicted, period_choice, start_col)
     render_footer()
 
 
