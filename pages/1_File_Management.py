@@ -822,6 +822,34 @@ def render_save_download_section():
 
     if has_data or config_items > 0:
 
+        # Filename input
+        st.markdown("**📝 Download Filename**")
+
+        # Initialize default filename in session state if not exists
+        if 'download_filename' not in st.session_state:
+            st.session_state.download_filename = f"portfolio_package_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        custom_filename = st.text_input(
+            "Base filename (without extension)",
+            value=st.session_state.download_filename,
+            key="custom_filename_input",
+            help="Enter filename without extension. Extensions (.json, .csv) will be added automatically."
+        )
+
+        # Update session state when user changes filename
+        if custom_filename != st.session_state.download_filename:
+            # Validate and sanitize filename
+            import re
+            sanitized_filename = re.sub(r'[<>:"/\\|?*]', '_', custom_filename.strip())
+            if sanitized_filename != custom_filename:
+                st.warning(f"⚠️ Filename sanitized to: {sanitized_filename}")
+            st.session_state.download_filename = sanitized_filename or f"portfolio_package_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Use the filename from session state
+        final_filename = st.session_state.download_filename
+
+        st.markdown("")  # Add spacing
+
         # Export options
         col1, col2 = st.columns(2)
 
@@ -842,7 +870,7 @@ def render_save_download_section():
                 st.download_button(
                     "📁 Download Complete Package",
                     json_str,
-                    file_name=f"portfolio_package_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    file_name=f"{final_filename}.json",
                     mime="application/json"
                 )
 
@@ -853,7 +881,7 @@ def render_save_download_section():
                     st.download_button(
                         "📄 Download Data CSV",
                         csv,
-                        file_name=f"portfolio_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        file_name=f"{final_filename}.csv",
                         mime="text/csv"
                     )
     else:

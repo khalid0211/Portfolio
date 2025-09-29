@@ -1195,22 +1195,31 @@ def main():
     with st.expander("📋 Executive Project Intelligence Center", expanded=False):
         st.markdown('<div class="section-header">🔍 Advanced Portfolio Analytics & Filtering</div>', unsafe_allow_html=True)
         
-        # Create budget categories for filtering
-        def categorize_budget(budget, symbol=currency_symbol):
-            if budget < 1000:
-                return f"Under {symbol} 1K"
-            elif budget < 10000:
-                return f"{symbol} 1K - {symbol} 10K"
-            elif budget < 50000:
-                return f"{symbol} 10K - {symbol} 50K"
-            elif budget < 100000:
-                return f"{symbol} 50K - {symbol} 100K"
-            elif budget < 500000:
-                return f"{symbol} 100K - {symbol} 500K"
-            else:
-                return f"Over {symbol} 500K"
-        
-        df['Budget_Category'] = df['Budget'].apply(categorize_budget)
+        # Create budget categories using configurable tier system
+        # Get tier configuration from session state
+        tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+        default_tier_config = {
+            'cutoff_points': [4000, 8000, 15000],
+            'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+            'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
+        }
+        cutoffs = tier_config.get('cutoff_points', default_tier_config['cutoff_points'])
+        tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+
+        def categorize_budget_by_tier(budget):
+            """Assign tier based on configurable budget ranges"""
+            if pd.isna(budget):
+                return "Unknown"
+            elif budget >= cutoffs[2]:  # Tier 4 (highest)
+                return tier_names[3]
+            elif budget >= cutoffs[1]:  # Tier 3
+                return tier_names[2]
+            elif budget >= cutoffs[0]:  # Tier 2
+                return tier_names[1]
+            else:  # Tier 1 (lowest)
+                return tier_names[0]
+
+        df['Budget_Category'] = df['Budget'].apply(categorize_budget_by_tier)
 
         # ═══════════════════════════════════════════════════════════════════
         # 🎯 FILTER CONTROLS SECTION
@@ -1410,11 +1419,30 @@ def main():
         # Apply filters
         filtered_df = df.copy()
 
-        # Apply organization filter
+        # Apply organization filter (include projects with missing org data when all orgs are selected)
         if org_columns:
-            filtered_df = filtered_df[filtered_df[org_columns[0]].isin(organization_filter)]
+            org_col = org_columns[0]
+            all_orgs = df[org_col].dropna().unique().tolist()
+            if set(organization_filter) == set(all_orgs):
+                # All organizations selected - include projects with missing org data
+                filtered_df = filtered_df[
+                    filtered_df[org_col].isin(organization_filter) |
+                    filtered_df[org_col].isnull()
+                ]
+            else:
+                # Specific organizations selected - exclude missing org data
+                filtered_df = filtered_df[filtered_df[org_col].isin(organization_filter)]
         else:
-            filtered_df = filtered_df[filtered_df['Organization'].isin(organization_filter)]
+            all_orgs = ['Engineering', 'Infrastructure', 'IT', 'Construction', 'Energy', 'Healthcare']
+            if set(organization_filter) == set(all_orgs):
+                # All organizations selected - include projects with missing org data
+                filtered_df = filtered_df[
+                    filtered_df['Organization'].isin(organization_filter) |
+                    filtered_df['Organization'].isnull()
+                ]
+            else:
+                # Specific organizations selected - exclude missing org data
+                filtered_df = filtered_df[filtered_df['Organization'].isin(organization_filter)]
 
         # Apply date range filter
         if selected_date_column and (start_date_filter or end_date_filter):
@@ -1450,14 +1478,49 @@ def main():
             (filtered_df['SPIe'].between(spie_range[0], spie_range[1]))
         ]
         
-        st.write(f"Showing {len(filtered_df)} projects (filtered from {len(df)} total)")
+        # Check if any filters are actually applied
+        filters_active = False
+
+        # Check organization filter
+        total_orgs = len(df[org_columns[0]].dropna().unique()) if org_columns else len(['Engineering', 'Infrastructure', 'IT', 'Construction', 'Energy', 'Healthcare'])
+        if len(organization_filter) < total_orgs:
+            filters_active = True
+
+        # Check health filter
+        if len(health_filter) < 3:  # Less than all 3 health statuses
+            filters_active = True
+
+        # Check budget filter
+        budget_min = df['Budget'].min()
+        budget_max = df['Budget'].max()
+        if min_budget > budget_min or max_budget < budget_max:
+            filters_active = True
+
+        # Check performance filters (CPI, SPI, SPIe)
+        if cpi_range != [df['CPI'].min(), df['CPI'].max()]:
+            filters_active = True
+        if spi_range != [df['SPI'].min(), df['SPI'].max()]:
+            filters_active = True
+        if spie_range != [df['SPIe'].min(), df['SPIe'].max()]:
+            filters_active = True
+
+        # Check date filters
+        if (selected_date_column and (start_date_filter or end_date_filter)):
+            filters_active = True
+
+        # Display appropriate message
+        if filters_active:
+            st.write(f"Showing {len(filtered_df)} projects (filtered from {len(df)} total)")
+        else:
+            st.write(f"Showing all {len(filtered_df)} projects")
+
 
         # ═══════════════════════════════════════════════════════════════════
         # FILTERED PORTFOLIO PERFORMANCE CURVE
         # ═══════════════════════════════════════════════════════════════════
 
         # Portfolio Time/Budget Performance Curve (Filtered)
-        with st.expander("📈 Portfolio Performance Curve (Filtered)", expanded=True):
+        with st.expander("📈 Portfolio Performance Curve (Filtered)", expanded=False):
             if len(filtered_df) > 0 and 'CPI' in filtered_df.columns and 'SPI' in filtered_df.columns and 'Budget' in filtered_df.columns:
                 # Get tier configuration from session state
                 tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
@@ -2293,7 +2356,7 @@ def main():
 
                 if start_date_col in filtered_df.columns and budget_col in filtered_df.columns:
                     # Controls for approvals chart
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
 
                     with col1:
                         approval_time_period = st.selectbox("Approval Time Period",
@@ -2303,9 +2366,18 @@ def main():
                                                           help="Month: Monthly approvals, Quarter: Quarterly approvals, FY: Financial Year (July-June)")
 
                     with col2:
+                        show_tiers = st.toggle("Show Tiers",
+                                             value=False,
+                                             key="approval_show_tiers",
+                                             help="Show stacked chart by budget tiers")
+
+                    with col3:
                         st.write("**Configuration:**")
                         st.write(f"📊 {approval_time_period}")
-                        st.write("💰 BAC by Approval Date")
+                        if show_tiers:
+                            st.write("🎯 Stacked by Tiers")
+                        else:
+                            st.write("💰 BAC by Approval Date")
 
                     try:
                         # Prepare data for approvals chart
@@ -2359,6 +2431,28 @@ def main():
                                     except:
                                         return (2000, 1)
 
+                            # Get tier configuration for tier-based charts
+                            tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+                            default_tier_config = {
+                                'cutoff_points': [4000, 8000, 15000],
+                                'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+                                'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
+                            }
+                            cutoffs = tier_config.get('cutoff_points', default_tier_config['cutoff_points'])
+                            tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+                            tier_colors = tier_config.get('colors', default_tier_config['colors'])
+
+                            def assign_tier(budget):
+                                """Assign tier based on budget"""
+                                if budget >= cutoffs[2]:  # Tier 4 (highest)
+                                    return tier_names[3]
+                                elif budget >= cutoffs[1]:  # Tier 3
+                                    return tier_names[2]
+                                elif budget >= cutoffs[0]:  # Tier 2
+                                    return tier_names[1]
+                                else:  # Tier 1 (lowest)
+                                    return tier_names[0]
+
                             # Calculate approvals data
                             approvals_data = []
                             for idx, row in df_approvals.iterrows():
@@ -2373,6 +2467,9 @@ def main():
                                     ev = row.get('Earned Value', 0)
                                     eac = row.get('EAC', 0)
 
+                                    # Assign tier for this project
+                                    tier = assign_tier(budget)
+
                                     approvals_data.append({
                                         'Period': period_key,
                                         'BAC': budget,
@@ -2380,46 +2477,87 @@ def main():
                                         'EV': ev,
                                         'EAC': eac,
                                         'Project': row.get('Project Name', 'Unknown'),
-                                        'Date': approval_date
+                                        'Date': approval_date,
+                                        'Tier': tier
                                     })
 
                             if approvals_data:
-                                # Create DataFrame and aggregate by period
+                                # Create DataFrame
                                 approvals_df = pd.DataFrame(approvals_data)
-                                period_approvals = approvals_df.groupby('Period').agg({
-                                    'BAC': 'sum',
-                                    'AC': 'sum',
-                                    'EV': 'sum',
-                                    'EAC': 'sum',
-                                    'Project': 'count'  # Count number of projects
-                                }).rename(columns={'Project': 'Number of Projects'}).reset_index()
 
-                                # Calculate percentage columns
-                                period_approvals['% AC/BAC'] = (period_approvals['AC'] / period_approvals['BAC'] * 100).fillna(0)
-                                period_approvals['% EV/BAC'] = (period_approvals['EV'] / period_approvals['BAC'] * 100).fillna(0)
-                                period_approvals['% EAC/BAC'] = (period_approvals['EAC'] / period_approvals['BAC'] * 100).fillna(0)
+                                if show_tiers:
+                                    # Aggregate by period and tier
+                                    period_tier_approvals = approvals_df.groupby(['Period', 'Tier']).agg({
+                                        'BAC': 'sum',
+                                        'AC': 'sum',
+                                        'EV': 'sum',
+                                        'EAC': 'sum',
+                                        'Project': 'count'
+                                    }).rename(columns={'Project': 'Number of Projects'}).reset_index()
 
-                                # Sort periods chronologically
-                                period_approvals['Sort_Key'] = period_approvals['Period'].apply(
-                                    lambda x: get_approval_sort_key(x, approval_time_period)
-                                )
-                                period_approvals = period_approvals.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+                                    # Sort periods chronologically
+                                    period_tier_approvals['Sort_Key'] = period_tier_approvals['Period'].apply(
+                                        lambda x: get_approval_sort_key(x, approval_time_period)
+                                    )
+                                    period_tier_approvals = period_tier_approvals.sort_values('Sort_Key').drop('Sort_Key', axis=1)
 
-                                # Create the approvals chart
-                                chart_title = f"Project Approvals by BAC - {approval_time_period} View"
+                                    # Create tier color mapping
+                                    tier_color_map = {tier_names[i]: tier_colors[i] for i in range(len(tier_names))}
 
-                                fig_approvals = px.bar(
-                                    period_approvals,
-                                    x='Period',
-                                    y='BAC',
-                                    title=chart_title,
-                                    labels={
-                                        'BAC': f'Total BAC ({currency_symbol})',
-                                        'Period': approval_time_period
-                                    },
-                                    color='BAC',
-                                    color_continuous_scale='greens'
-                                )
+                                    # Create stacked bar chart by tiers
+                                    chart_title = f"Project Approvals by Tier - {approval_time_period} View"
+
+                                    fig_approvals = px.bar(
+                                        period_tier_approvals,
+                                        x='Period',
+                                        y='BAC',
+                                        color='Tier',
+                                        title=chart_title,
+                                        labels={
+                                            'BAC': f'Total BAC ({currency_symbol})',
+                                            'Period': approval_time_period,
+                                            'Tier': 'Budget Tier'
+                                        },
+                                        color_discrete_map=tier_color_map,
+                                        category_orders={'Tier': tier_names}  # Ensure consistent order
+                                    )
+
+                                else:
+                                    # Regular aggregation by period only
+                                    period_approvals = approvals_df.groupby('Period').agg({
+                                        'BAC': 'sum',
+                                        'AC': 'sum',
+                                        'EV': 'sum',
+                                        'EAC': 'sum',
+                                        'Project': 'count'  # Count number of projects
+                                    }).rename(columns={'Project': 'Number of Projects'}).reset_index()
+
+                                    # Calculate percentage columns
+                                    period_approvals['% AC/BAC'] = (period_approvals['AC'] / period_approvals['BAC'] * 100).fillna(0)
+                                    period_approvals['% EV/BAC'] = (period_approvals['EV'] / period_approvals['BAC'] * 100).fillna(0)
+                                    period_approvals['% EAC/BAC'] = (period_approvals['EAC'] / period_approvals['BAC'] * 100).fillna(0)
+
+                                    # Sort periods chronologically
+                                    period_approvals['Sort_Key'] = period_approvals['Period'].apply(
+                                        lambda x: get_approval_sort_key(x, approval_time_period)
+                                    )
+                                    period_approvals = period_approvals.sort_values('Sort_Key').drop('Sort_Key', axis=1)
+
+                                    # Create regular bar chart
+                                    chart_title = f"Project Approvals by BAC - {approval_time_period} View"
+
+                                    fig_approvals = px.bar(
+                                        period_approvals,
+                                        x='Period',
+                                        y='BAC',
+                                        title=chart_title,
+                                        labels={
+                                            'BAC': f'Total BAC ({currency_symbol})',
+                                            'Period': approval_time_period
+                                        },
+                                        color='BAC',
+                                        color_continuous_scale='greens'
+                                    )
 
                                 # Update layout for better visualization
                                 fig_approvals.update_layout(
@@ -2447,21 +2585,46 @@ def main():
 
                                 st.plotly_chart(fig_approvals, width='stretch')
 
+                                # Add tier legend when tiers are enabled
+                                if show_tiers:
+                                    st.markdown("**🎯 Tier Legend:**")
+                                    tier_legend_items = []
+                                    for i, tier_name in enumerate(tier_names):
+                                        if i == 0:  # Tier 1 (lowest)
+                                            range_text = f"< {currency_symbol}{cutoffs[0]:,.0f}"
+                                        elif i == len(tier_names) - 1:  # Tier 4 (highest)
+                                            range_text = f"≥ {currency_symbol}{cutoffs[2]:,.0f}"
+                                        else:  # Tier 2 and 3
+                                            range_text = f"{currency_symbol}{cutoffs[i-1]:,.0f} - {currency_symbol}{cutoffs[i]:,.0f}"
+
+                                        # Color indicators with emojis
+                                        color_emoji = ["🔵", "🟢", "🟠", "🔴"][i]
+                                        tier_legend_items.append(f"{color_emoji} {tier_name}: {range_text}")
+
+                                    st.text(" | ".join(tier_legend_items))
+
                                 # Show detailed data table
                                 with st.expander("📊 Detailed Approvals Data", expanded=False):
-                                    display_approvals = period_approvals.copy()
-
-                                    # Format currency columns
-                                    for col in ['BAC', 'AC', 'EV', 'EAC']:
-                                        if col in display_approvals.columns:
-                                            display_approvals[col] = display_approvals[col].apply(
-                                                lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
-                                            )
-
-                                    # Format percentage columns
-                                    for col in ['% AC/BAC', '% EV/BAC', '% EAC/BAC']:
-                                        if col in display_approvals.columns:
-                                            display_approvals[col] = display_approvals[col].apply(lambda x: f"{x:.1f}%")
+                                    if show_tiers:
+                                        display_approvals = period_tier_approvals.copy()
+                                        # Format currency columns
+                                        for col in ['BAC', 'AC', 'EV', 'EAC']:
+                                            if col in display_approvals.columns:
+                                                display_approvals[col] = display_approvals[col].apply(
+                                                    lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                                )
+                                    else:
+                                        display_approvals = period_approvals.copy()
+                                        # Format currency columns
+                                        for col in ['BAC', 'AC', 'EV', 'EAC']:
+                                            if col in display_approvals.columns:
+                                                display_approvals[col] = display_approvals[col].apply(
+                                                    lambda x: format_currency(x, currency_symbol, currency_postfix, thousands=False)
+                                                )
+                                        # Format percentage columns (only available in non-tier mode)
+                                        for col in ['% AC/BAC', '% EV/BAC', '% EAC/BAC']:
+                                            if col in display_approvals.columns:
+                                                display_approvals[col] = display_approvals[col].apply(lambda x: f"{x:.1f}%")
 
                                     st.dataframe(display_approvals, width='stretch')
 
