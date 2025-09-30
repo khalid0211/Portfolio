@@ -3015,6 +3015,234 @@ def main():
             else:
                 st.info("No data available for duration analysis.")
 
+        # Time/Budget Performance Chart
+        with st.expander("Time/Budget Performance", expanded=False):
+            if len(filtered_df) > 0:
+                st.markdown("### Time/Budget Performance Analysis")
+                st.markdown("This chart shows each project's performance relative to time and budget, with reference curves for comparison.")
+
+                # Calculate normalized values for each project
+                performance_data = []
+
+                # Get tier configuration
+                tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+                default_tier_config = {
+                    'cutoff_points': [4000, 8000, 15000],
+                    'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+                    'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
+                }
+                tier_colors = tier_config.get('colors', default_tier_config['colors'])
+                tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+
+                # Create color mapping for tiers
+                tier_color_map = {tier_names[i]: tier_colors[i] for i in range(len(tier_names))}
+
+                for _, project in filtered_df.iterrows():
+                    # Calculate % Time Used (AD/OD) - Actual Duration / Original Duration
+                    actual_duration = project.get('Actual Duration', project.get('Actual Duration (months)', 0))
+                    original_duration = project.get('Original Duration', project.get('Original Duration (months)', 0))
+
+                    if pd.notna(actual_duration) and pd.notna(original_duration) and original_duration > 0:
+                        time_used_pct = actual_duration / original_duration
+                    else:
+                        continue  # Skip projects without duration data
+
+                    # Calculate % Budget Used (AC/BAC) - Actual Cost / Budget at Completion
+                    actual_cost = project.get('Actual Cost', 0)
+                    budget = project.get('Budget', 0)
+
+                    if pd.notna(actual_cost) and pd.notna(budget) and budget > 0:
+                        budget_used_pct = actual_cost / budget
+                    else:
+                        continue  # Skip projects without budget/cost data
+
+                    # Get tier and color
+                    tier = project.get('Budget_Category', 'Unknown')
+                    color = tier_color_map.get(tier, '#cccccc')
+
+                    performance_data.append({
+                        'project_id': project.get('Project ID', 'Unknown'),
+                        'project_name': project.get('Project Name', 'Unknown'),
+                        'organization': project.get('Organization', 'Unknown'),
+                        'time_used_pct': time_used_pct,
+                        'budget_used_pct': budget_used_pct,
+                        'tier': tier,
+                        'color': color,
+                        'bac': project.get('Budget', 0),
+                        'spi': project.get('SPI', 0),
+                        'cpi': project.get('CPI', 0)
+                    })
+
+                if performance_data:
+                    # Calculate portfolio-level SPI and CPI for display
+                    portfolio_spi = filtered_df['SPI'].mean() if 'SPI' in filtered_df.columns else 1.0
+                    portfolio_cpi = filtered_df['CPI'].mean() if 'CPI' in filtered_df.columns else 1.0
+
+                    # Calculate portfolio-level % time used and % budget used with weighted formulas
+                    # % time used = sum(AD*BAC)/sum(OD*BAC)
+                    # % budget used = sum(AC)/sum(BAC)
+                    total_ad_bac = 0
+                    total_od_bac = 0
+                    total_ac = 0
+                    total_bac = 0
+
+                    for _, project in filtered_df.iterrows():
+                        actual_duration = project.get('Actual Duration', project.get('Actual Duration (months)', 0))
+                        original_duration = project.get('Original Duration', project.get('Original Duration (months)', 0))
+                        actual_cost = project.get('Actual Cost', 0)
+                        budget = project.get('Budget', 0)
+
+                        if pd.notna(actual_duration) and pd.notna(original_duration) and pd.notna(budget) and budget > 0:
+                            total_ad_bac += actual_duration * budget
+                            total_od_bac += original_duration * budget
+
+                        if pd.notna(actual_cost) and pd.notna(budget):
+                            total_ac += actual_cost
+                            total_bac += budget
+
+                    portfolio_time_used = total_ad_bac / total_od_bac if total_od_bac > 0 else 1.0
+                    portfolio_budget_used = total_ac / total_bac if total_bac > 0 else 1.0
+
+                    # Create the plot using Plotly for interactivity
+
+                    fig = go.Figure()
+
+                    # Create normalized time array for reference curves
+                    T = np.linspace(0, 1, 101)
+
+                    # Define the performance curves (same as in project analysis)
+                    blue_curve = -0.794*T**3 + 0.632*T**2 + 1.162*T
+                    red_curve = -0.387*T**3 + 1.442*T**2 - 0.055*T
+
+                    # Plot the reference curves
+                    fig.add_trace(go.Scatter(
+                        x=T, y=blue_curve,
+                        mode='lines',
+                        name='Blue Curve (Good Performance)',
+                        line=dict(color='blue', width=2),
+                        opacity=0.7,
+                        hoverinfo='skip'
+                    ))
+
+                    fig.add_trace(go.Scatter(
+                        x=T, y=red_curve,
+                        mode='lines',
+                        name='Red Curve (Poor Performance)',
+                        line=dict(color='red', width=2),
+                        opacity=0.7,
+                        hoverinfo='skip'
+                    ))
+
+                    # Plot individual projects colored by tier with tooltips
+                    for tier in tier_names:
+                        tier_projects = [p for p in performance_data if p['tier'] == tier]
+                        if tier_projects:
+                            x_vals = [p['time_used_pct'] for p in tier_projects]
+                            y_vals = [p['budget_used_pct'] for p in tier_projects]
+                            color = tier_color_map[tier]
+
+                            # Create custom hover text
+                            hover_text = []
+                            for p in tier_projects:
+                                hover_text.append(
+                                    f"<b>{p['project_name']}</b><br>" +
+                                    f"Project ID: {p['project_id']}<br>" +
+                                    f"Organization: {p['organization']}<br>" +
+                                    f"BAC: ${p['bac']:,.0f}<br>" +
+                                    f"SPI: {p['spi']:.2f}<br>" +
+                                    f"CPI: {p['cpi']:.2f}<br>" +
+                                    f"% Time Used: {p['time_used_pct'] * 100:.1f}%<br>" +
+                                    f"% Budget Used: {p['budget_used_pct'] * 100:.1f}%"
+                                )
+
+                            fig.add_trace(go.Scatter(
+                                x=x_vals, y=y_vals,
+                                mode='markers',
+                                name=tier,
+                                marker=dict(
+                                    color=color,
+                                    size=10,
+                                    opacity=0.7,
+                                    line=dict(color='black', width=1)
+                                ),
+                                hovertemplate='%{hovertext}<extra></extra>',
+                                hovertext=hover_text
+                            ))
+
+                    # Add portfolio overall performance as large yellow star
+                    portfolio_hover = (
+                        f"<b>Portfolio Overall</b><br>" +
+                        f"% Time Used: {portfolio_time_used * 100:.1f}%<br>" +
+                        f"% Budget Used: {portfolio_budget_used * 100:.1f}%<br>" +
+                        f"Average SPI: {portfolio_spi:.2f}<br>" +
+                        f"Average CPI: {portfolio_cpi:.2f}"
+                    )
+
+                    fig.add_trace(go.Scatter(
+                        x=[portfolio_time_used], y=[portfolio_budget_used],
+                        mode='markers',
+                        name=f'Portfolio Overall',
+                        marker=dict(
+                            color='yellow',
+                            size=20,
+                            opacity=0.9,
+                            symbol='star',
+                            line=dict(color='black', width=3)
+                        ),
+                        hovertemplate='%{hovertext}<extra></extra>',
+                        hovertext=[portfolio_hover]
+                    ))
+
+                    # Add reference lines
+                    fig.add_hline(y=1.0, line_dash="dash", line_color="gray", opacity=0.5, annotation_text="Budget Baseline")
+                    fig.add_vline(x=1.0, line_dash="dash", line_color="gray", opacity=0.5, annotation_text="Schedule Baseline")
+
+                    # Customize the layout
+                    fig.update_layout(
+                        title='Portfolio Time/Budget Performance Analysis',
+                        xaxis_title='% Time Used (AD/OD)',
+                        yaxis_title='% Budget Used (AC/BAC)',
+                        xaxis=dict(range=[0, 1.3], showgrid=True, gridwidth=1, gridcolor='lightgray'),
+                        yaxis=dict(range=[0, 1.3], showgrid=True, gridwidth=1, gridcolor='lightgray'),
+                        width=900,
+                        height=600,
+                        showlegend=True,
+                        legend=dict(
+                            yanchor="top",
+                            y=0.99,
+                            xanchor="left",
+                            x=1.01
+                        ),
+                        margin=dict(r=150)
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # Add interpretation guide
+                    st.markdown("""
+                    **📊 Chart Interpretation:**
+                    - **X-axis**: % Time Used (AD/OD) - 1.0 = on schedule, <1.0 = ahead, >1.0 = delayed
+                    - **Y-axis**: % Budget Used (AC/BAC) - 1.0 = on budget, <1.0 = under budget, >1.0 = over budget
+                    - **Blue Curve**: Represents good performance trajectory
+                    - **Red Curve**: Represents poor performance trajectory
+                    - **Yellow Star**: Overall portfolio performance
+                    - **Project Colors**: Based on project tier classification
+                    """)
+
+                    # Show summary statistics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Projects Analyzed", len(performance_data))
+                    with col2:
+                        st.metric("Portfolio % Time Used", f"{portfolio_time_used * 100:.1f}%")
+                    with col3:
+                        st.metric("Portfolio % Budget Used", f"{portfolio_budget_used * 100:.1f}%")
+
+                else:
+                    st.warning("Insufficient data for Time/Budget Performance analysis. Projects need both duration data (Actual Duration, Original Duration) and budget data (Actual Cost, Budget).")
+            else:
+                st.info("No projects available for Time/Budget Performance analysis.")
+
         # Portfolio Treemap
         with st.expander("Portfolio Treemap", expanded=False):
             if len(filtered_df) > 0:
