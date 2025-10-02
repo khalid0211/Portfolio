@@ -2,6 +2,31 @@
 Core modules for the Portfolio Management Suite
 """
 
+# Import ALL functions from utils module for easy access
+from .utils import *  # noqa: F401, F403
+# Explicit imports for IDE support and documentation
+from .utils import (
+    # Validation & Safety
+    validate_numeric_input,
+    safe_divide,
+    is_valid_finite_number,
+    safe_calculate_forecast_duration,
+
+    # Date Functions
+    parse_date_any,
+    add_months_approx,
+
+    # Mathematical Functions
+    scurve_cdf,
+    calculate_durations,
+
+    # Constants
+    DAYS_PER_MONTH,
+    INTEGRATION_STEPS,
+    EXCEL_ORDINAL_BASE,
+)
+
+# Import from evm_engine module
 from .evm_engine import (
     # Main APIs
     perform_batch_calculation,
@@ -15,19 +40,11 @@ from .evm_engine import (
     find_earned_schedule_scurve,
     calculate_earned_schedule_metrics,
 
-    # Mathematical functions
-    scurve_cdf,
-    calculate_durations,
+    # Financial calculations
     calculate_present_value,
 
-    # Utility functions
-    safe_divide,
+    # Additional utilities from evm_engine
     safe_financial_metrics,
-    validate_numeric_input,
-    is_valid_finite_number,
-    parse_date_any,
-    add_months_approx,
-    safe_calculate_forecast_duration,
 )
 
 __all__ = [
@@ -43,17 +60,22 @@ __all__ = [
     'find_earned_schedule_scurve',
     'calculate_earned_schedule_metrics',
 
-    # Mathematical functions
-    'scurve_cdf',
-    'calculate_durations',
+    # Financial calculations
     'calculate_present_value',
-
-    # Utility functions
-    'safe_divide',
     'safe_financial_metrics',
+
+    # Utility functions (from core.utils)
     'validate_numeric_input',
+    'safe_divide',
     'is_valid_finite_number',
+    'safe_calculate_forecast_duration',
     'parse_date_any',
     'add_months_approx',
-    'safe_calculate_forecast_duration',
+    'scurve_cdf',
+    'calculate_durations',
+
+    # Constants
+    'DAYS_PER_MONTH',
+    'INTEGRATION_STEPS',
+    'EXCEL_ORDINAL_BASE',
 ]
