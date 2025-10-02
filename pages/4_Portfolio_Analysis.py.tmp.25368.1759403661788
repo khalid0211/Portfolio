@@ -1290,6 +1290,118 @@ def main():
 
     # Interactive Data Explorer
     with st.expander("Advanced Portfolio Analytics", expanded=False):
+        st.markdown("""
+        ### 🤖 AI-Powered Portfolio Executive Report
+
+        Generate a comprehensive executive briefing of your portfolio health using AI.
+        This report includes performance analysis, risk assessment, and strategic recommendations.
+
+        **Report includes:**
+        - Portfolio dashboard with key metrics
+        - Executive summary with overall health rating
+        - Performance analysis (cost and schedule)
+        - Risk assessment across all dimensions
+        - Strategic recommendations and corrective actions
+        - Decision points requiring executive approval
+        """)
+
+        # Check if LLM is configured
+        llm_config = st.session_state.config_dict.get('llm_config', {})
+
+        if not llm_config or not llm_config.get('has_api_key'):
+            st.warning("⚠️ LLM Provider not configured. Please configure it in File Management to enable AI-generated reports.")
+        elif not create_portfolio_executive_summary or not safe_llm_request:
+            st.error("❌ Required functions not available. Please check imports.")
+        else:
+            if st.button("🚀 Generate Executive Portfolio Brief", type="primary", key="gen_portfolio_brief"):
+                with st.spinner("Generating comprehensive portfolio brief..."):
+                    try:
+                        # Calculate quadrants with correct key names
+                        on_budget_on_schedule = len(df[(df['CPI'] >= 0.95) & (df['SPI'] >= 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
+                        over_budget_on_schedule = len(df[(df['CPI'] < 0.95) & (df['SPI'] >= 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
+                        on_budget_behind_schedule = len(df[(df['CPI'] >= 0.95) & (df['SPI'] < 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
+                        over_budget_behind_schedule = len(df[(df['CPI'] < 0.95) & (df['SPI'] < 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
+
+                        # Prepare portfolio summary data with correct structure
+                        portfolio_summary = {
+                            'total_projects': metrics['total_projects'],
+                            'total_bac': metrics['total_budget'],
+                            'total_ac': metrics['total_actual_cost'],
+                            'total_ev': metrics['total_earned_value'],
+                            'total_pv': metrics['total_planned_value'],
+                            'total_eac': metrics['total_eac'],
+                            'total_etc': metrics['total_etc'],
+                            'portfolio_cpi': metrics['portfolio_cpi'],
+                            'portfolio_spi': metrics['portfolio_spi'],
+                            'weighted_avg_cpi': portfolio_cpi_weighted,
+                            'weighted_avg_spi': portfolio_spi_weighted,
+                            'average_progress': df['Completion %'].mean() if 'Completion %' in df.columns else 0,
+                            'critical_projects': metrics['critical_projects'],
+                            'at_risk_projects': metrics['at_risk_projects'],
+                            'healthy_projects': metrics['healthy_projects'],
+                            'forecast_overrun': metrics['forecast_overrun'],
+                            'quadrants': {
+                                'on_budget_on_schedule': on_budget_on_schedule,
+                                'over_budget_on_schedule': over_budget_on_schedule,
+                                'on_budget_behind_schedule': on_budget_behind_schedule,
+                                'over_budget_behind_schedule': over_budget_behind_schedule
+                            }
+                        }
+
+                        # Get controls for currency formatting
+                        controls = st.session_state.config_dict.get('controls', {
+                            'currency_symbol': '$',
+                            'currency_postfix': ''
+                        })
+
+                        # Create prompt
+                        prompt = create_portfolio_executive_summary(portfolio_summary, controls)
+
+                        # Check if prompt creation was successful
+                        if prompt.startswith("Error"):
+                            st.error(f"Failed to create prompt: {prompt}")
+                        else:
+                            # Make LLM request
+                            brief_response = safe_llm_request(
+                                llm_config.get('provider', ''),
+                                llm_config.get('model', ''),
+                                llm_config.get('api_key', ''),
+                                llm_config.get('temperature', 0.2),
+                                llm_config.get('timeout', 120),
+                                prompt
+                            )
+
+                            st.session_state.portfolio_executive_brief = brief_response
+
+                    except Exception as e:
+                        st.error(f"Failed to generate portfolio brief: {e}")
+                        import traceback
+                        st.error(f"Detailed error: {traceback.format_exc()}")
+
+            # Display brief if generated
+            if "portfolio_executive_brief" in st.session_state:
+                brief = st.session_state.portfolio_executive_brief
+                if brief.startswith("Error:") or brief == "No API key available":
+                    if brief == "No API key available":
+                        st.warning("⚠️ No API key available. Please upload an API key file in File Management.")
+                    else:
+                        st.error(brief)
+                else:
+                    st.markdown("#### 📄 Executive Portfolio Report")
+                    st.markdown(brief)
+
+                    # Download button
+                    st.download_button(
+                        "📥 Download Portfolio Brief",
+                        brief,
+                        file_name=f"portfolio_executive_brief_{datetime.now().strftime('%Y%m%d')}.md",
+                        mime="text/markdown",
+                        key="download_portfolio_brief"
+                    )
+
+
+    # Interactive Data Explorer
+    with st.expander("Advanced Portfolio Analytics", expanded=False):
         # Budget_Category already created earlier in the code
 
         # ═══════════════════════════════════════════════════════════════════
@@ -2098,304 +2210,7 @@ def main():
                 st.metric("⏱️ Portfolio SPI", f"{weighted_spi:.3f}", help="Portfolio Schedule Performance Index: SUM(Earned Value) / SUM(Plan Value)")
             with col3:
                 st.metric("📊 Avg SPIe", f"{weighted_spie:.3f}", help="Weighted Average Schedule Performance Index Estimate (weighted by budget)")
-
-
-    # Executive Portfolio Brief Section (Enhanced with Project Details)
-    with st.expander("📊 Executive Portfolio Brief (AI-Generated)", expanded=False):
-        st.markdown("""
-        ### 🤖 AI-Powered Portfolio Executive Report
-
-        Generate a comprehensive executive briefing of your portfolio health using AI with deep analysis of hidden trends.
-
-        **Advanced Analysis includes:**
-        - Portfolio dashboard with key metrics
-        - Executive summary with overall health rating
-        - Performance analysis (cost and schedule)
-        - **Trend Analysis**: Patterns by organization, project size, tier, and timeline
-        - **Root Cause Analysis**: Identify systemic issues affecting performance
-        - Risk assessment across all dimensions
-        - Strategic recommendations and corrective actions
-        - Decision points requiring executive approval
-        """)
-
-        # Check if LLM is configured
-        llm_config = st.session_state.config_dict.get('llm_config', {})
-
-        if not llm_config or not llm_config.get('has_api_key'):
-            st.warning("⚠️ LLM Provider not configured. Please configure it in File Management to enable AI-generated reports.")
-        elif not safe_llm_request:
-            st.error("❌ Required functions not available. Please check imports.")
-        else:
-            if st.button("🚀 Generate Executive Portfolio Brief", type="primary", key="gen_portfolio_brief"):
-                with st.spinner("Analyzing portfolio data and generating comprehensive brief..."):
-                    try:
-                        # Calculate quadrants with correct key names
-                        on_budget_on_schedule = len(df[(df['CPI'] >= 0.95) & (df['SPI'] >= 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
-                        over_budget_on_schedule = len(df[(df['CPI'] < 0.95) & (df['SPI'] >= 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
-                        on_budget_behind_schedule = len(df[(df['CPI'] >= 0.95) & (df['SPI'] < 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
-                        over_budget_behind_schedule = len(df[(df['CPI'] < 0.95) & (df['SPI'] < 0.95)]) if 'CPI' in df.columns and 'SPI' in df.columns else 0
-
-                        # Get controls for currency formatting
-                        controls = st.session_state.config_dict.get('controls', {
-                            'currency_symbol': '$',
-                            'currency_postfix': ''
-                        })
-
-                        currency = controls.get('currency_symbol', '$')
-                        postfix = controls.get('currency_postfix', '')
-
-                        # Prepare detailed project data for trend analysis
-                        project_details = []
-                        for _, row in df.iterrows():
-                            project_info = {
-                                'name': row.get('Project', row.get('Project Name', 'Unknown')),
-                                'budget': row.get('Budget', row.get('BAC', 0)),
-                                'cpi': row.get('CPI', 0),
-                                'spi': row.get('SPI', 0),
-                                'progress': row.get('Completion %', 0),
-                                'organization': row.get('Organization', row.get('Org', 'Unknown')),
-                                'tier': row.get('Budget_Category', 'Unknown'),
-                                'health': row.get('Health_Category', 'Unknown'),
-                            }
-                            # Add dates if available
-                            if 'Plan Start' in row:
-                                project_info['start_date'] = str(row['Plan Start'])[:10] if pd.notna(row['Plan Start']) else 'N/A'
-                            if 'Plan Finish' in row:
-                                project_info['finish_date'] = str(row['Plan Finish'])[:10] if pd.notna(row['Plan Finish']) else 'N/A'
-
-                            project_details.append(project_info)
-
-                        # Analyze trends by organization
-                        org_analysis = df.groupby('Organization').agg({
-                            'CPI': 'mean',
-                            'SPI': 'mean',
-                            'Budget': 'sum'
-                        }).round(2).to_dict('index') if 'Organization' in df.columns else {}
-
-                        # Analyze trends by tier
-                        tier_analysis = df.groupby('Budget_Category').agg({
-                            'CPI': 'mean',
-                            'SPI': 'mean',
-                            'Budget': 'sum'
-                        }).round(2).to_dict('index') if 'Budget_Category' in df.columns else {}
-
-                        # Create enhanced prompt with detailed project data
-                        prompt = f"""
-You are a seasoned Chief Portfolio Officer preparing an executive briefing for the C-Suite. Create a comprehensive, narrative-style report that tells the story of this portfolio's performance with actionable insights.
-
-Write in a professional yet conversational tone that executives can quickly scan but also dive deep into. Use clear headings, bullet points, and specific numbers to support your analysis.
-
----
-
-# PORTFOLIO EXECUTIVE BRIEFING
-**Report Date:** {datetime.now().strftime('%B %d, %Y')}
-
-## DATA SNAPSHOT
-
-**Portfolio Scale:**
-- {metrics['total_projects']} active projects under management
-- Total Budget at Completion (BAC): {currency}{metrics['total_budget']:,.0f}{' ' + postfix if postfix else ''}
-- Current Actual Cost (AC): {currency}{metrics['total_actual_cost']:,.0f}{' ' + postfix if postfix else ''}
-- Earned Value (EV): {currency}{metrics['total_earned_value']:,.0f}{' ' + postfix if postfix else ''}
-- Average Portfolio Progress: {df['Completion %'].mean() if 'Completion %' in df.columns else 0:.1f}%
-
-**Key Performance Indicators:**
-- Portfolio CPI: {metrics['portfolio_cpi']:.2f} (Every dollar spent delivers {currency}{metrics['portfolio_cpi']:.2f} of value)
-- Portfolio SPI: {metrics['portfolio_spi']:.2f} (Portfolio is {'ahead of' if metrics['portfolio_spi'] > 1 else 'behind'} schedule)
-- Forecast at Completion (EAC): {currency}{metrics['total_eac']:,.0f}{' ' + postfix if postfix else ''}
-- Projected Overrun: {currency}{metrics['forecast_overrun']:,.0f}{' ' + postfix if postfix else ''} ({'over' if metrics['forecast_overrun'] > 0 else 'under'} budget)
-
-**Portfolio Health Status:**
-- 🟢 Healthy Projects: {metrics['healthy_projects']} ({(metrics['healthy_projects']/metrics['total_projects'])*100:.0f}%)
-- 🟡 At Risk Projects: {metrics['at_risk_projects']} ({(metrics['at_risk_projects']/metrics['total_projects'])*100:.0f}%)
-- 🔴 Critical Projects: {metrics['critical_projects']} ({(metrics['critical_projects']/metrics['total_projects'])*100:.0f}%)
-
-**Performance Quadrant Distribution:**
-- ✅ On Budget & On Schedule: {on_budget_on_schedule} projects ({(on_budget_on_schedule/metrics['total_projects'])*100:.0f}%)
-- ⚠️ Over Budget but On Schedule: {over_budget_on_schedule} projects ({(over_budget_on_schedule/metrics['total_projects'])*100:.0f}%)
-- ⏰ On Budget but Behind Schedule: {on_budget_behind_schedule} projects ({(on_budget_behind_schedule/metrics['total_projects'])*100:.0f}%)
-- 🚨 Over Budget & Behind Schedule: {over_budget_behind_schedule} projects ({(over_budget_behind_schedule/metrics['total_projects'])*100:.0f}%)
-
-**Performance by Organization:**
-{chr(10).join([f"- **{org}**: CPI {data['CPI']:.2f}, SPI {data['SPI']:.2f}, Managing {currency}{data['Budget']:,.0f}{' ' + postfix if postfix else ''} ({(data['Budget']/metrics['total_budget'])*100:.0f}% of portfolio)" for org, data in sorted(org_analysis.items(), key=lambda x: x[1]['Budget'], reverse=True)]) if org_analysis else "Organization data not available"}
-
-**Performance by Project Size (Tier):**
-{chr(10).join([f"- **{tier}**: CPI {data['CPI']:.2f}, SPI {data['SPI']:.2f}, Total Value {currency}{data['Budget']:,.0f}{' ' + postfix if postfix else ''}" for tier, data in sorted(tier_analysis.items(), key=lambda x: x[1]['Budget'], reverse=True)]) if tier_analysis else "Tier data not available"}
-
-**🚨 Projects Requiring Immediate Attention (Worst CPI):**
-{chr(10).join([f"{i+1}. **{p['name']}** ({p['organization']}, {p['tier']})\n   - Cost Performance: CPI {p['cpi']:.2f} (Spending {currency}{(1/p['cpi'] if p['cpi'] > 0 else 0):.2f} for every {currency}1.00 of value)\n   - Schedule: SPI {p['spi']:.2f}\n   - Physical Progress: {p['progress']:.0f}%\n   - Status: {p['health']}" for i, p in enumerate(sorted(project_details, key=lambda x: x['cpi'])[:5])])}
-
-**⏰ Projects with Significant Schedule Delays (Worst SPI):**
-{chr(10).join([f"{i+1}. **{p['name']}** ({p['organization']}, {p['tier']})\n   - Schedule Performance: SPI {p['spi']:.2f} ({'Ahead' if p['spi'] > 1 else f'{((1-p['spi'])*100):.0f}% behind'} schedule)\n   - Cost: CPI {p['cpi']:.2f}\n   - Progress: {p['progress']:.0f}%\n   - Status: {p['health']}" for i, p in enumerate(sorted(project_details, key=lambda x: x['spi'])[:5])])}
-
----
-
-Now, based on this comprehensive data, provide your executive analysis:
-
-## 1. EXECUTIVE SUMMARY
-Write 3-5 concise bullets that capture the most important insights an executive needs to know. Each bullet should:
-- State the finding clearly with specific numbers
-- Explain what it means in business terms
-- Indicate if action is required
-
-Example: "Portfolio is tracking 8% over budget with EAC of $X.X billion, driven primarily by Organization Y's projects which represent 35% of overruns despite managing only 20% of portfolio value."
-
-## 2. FINANCIAL PERFORMANCE NARRATIVE
-Tell the story of the portfolio's financial health:
-- How efficiently are we converting budget into value?
-- Which organizations or project types are performing well vs. struggling?
-- What does the CPI trend tell us about our project management capabilities?
-- Are cost overruns concentrated or widespread?
-- What's driving the forecast overrun/underrun?
-
-Use specific examples and numbers. Compare performance across organizations and tiers.
-
-## 3. SCHEDULE PERFORMANCE NARRATIVE
-Tell the story of timeline adherence:
-- Are we meeting our delivery commitments?
-- Where are the delays concentrated? (organization, tier, project type?)
-- Is poor schedule performance correlated with cost issues?
-- What does this mean for our strategic timeline goals?
-
-## 4. DEEP DIVE: PATTERNS & ROOT CAUSES
-This is the most critical section. Analyze the data for hidden patterns:
-
-**Organizational Performance:**
-- Are certain organizations consistently outperforming or underperforming?
-- Is this a capability issue, resource issue, or complexity issue?
-- What can high-performing organizations teach struggling ones?
-
-**Project Size/Complexity Patterns:**
-- Do larger projects (higher tiers) perform differently than smaller ones?
-- Is our PMO better equipped for certain project scales?
-- Should we adjust governance based on tier?
-
-**Systemic vs. Isolated Issues:**
-- Are problems concentrated in a few projects or spread across the portfolio?
-- Do we have systemic process issues or just a few troubled projects?
-- What percentage of the budget is in healthy vs. troubled projects?
-
-**Strategic Implications:**
-- What does this performance pattern mean for our strategic objectives?
-- Are we at risk of missing key business milestones?
-
-## 5. PORTFOLIO HEALTH RATING & TRAJECTORY
-
-Give an overall rating: **EXCELLENT** | **GOOD** | **FAIR** | **POOR** | **CRITICAL**
-
-Explain your rating with specific rationale. Then discuss:
-- Is performance improving, stable, or declining?
-- What's the trajectory if current trends continue?
-- How does this compare to industry benchmarks or past performance?
-
-## 6. RISK ASSESSMENT & IMPACT QUANTIFICATION
-
-Identify 3-5 specific risks with:
-- **Risk Description:** What could go wrong?
-- **Likelihood:** High/Medium/Low
-- **Impact:** Quantify in dollars and timeline
-- **Affected Projects/Organizations:** Be specific
-- **Mitigation Status:** What's being done?
-
-Example: "**Risk:** Organization X's consistent underperformance (CPI 0.72) may lead to $15M additional overrun by Q4. **Impact:** Would consume 40% of portfolio contingency reserve. **Mitigation:** Requires immediate intervention."
-
-## 7. STRATEGIC RECOMMENDATIONS (Prioritized)
-
-Provide 5-8 actionable recommendations ranked by impact. For each:
-- **Recommendation:** What should be done?
-- **Rationale:** Why this matters (tie to data)
-- **Expected Impact:** Quantify the benefit
-- **Owner:** Who should lead this?
-- **Timeline:** When should this happen?
-- **Success Metric:** How will we measure success?
-
-Focus on strategic moves, not tactical project management. Think:
-- Organizational restructuring
-- Resource reallocation
-- Process improvements
-- Governance changes
-- Portfolio rebalancing
-
-## 8. IMMEDIATE ACTION PLAN (Next 60 Days)
-
-Create a prioritized action list with:
-- **Action Item:** Specific, clear directive
-- **Owner:** Organization or role responsible
-- **Deadline:** Specific date or timeframe
-- **Success Criteria:** How we'll know it's done
-- **Dependencies:** What's needed to execute
-
-Focus on actions that will have the highest impact on portfolio health.
-
-## 9. EXECUTIVE DECISION POINTS
-
-List 2-4 decisions that require C-suite approval:
-- Budget reallocation or contingency release
-- Project cancellation/pause considerations
-- Organizational restructuring
-- Strategic priority changes
-- Major resource shifts
-
-For each, provide:
-- The decision needed
-- Options available
-- Recommendation with rationale
-- Consequences of inaction
-
----
-
-**WRITING GUIDELINES:**
-- Use clear, confident language appropriate for senior executives
-- Avoid jargon; explain technical terms when needed
-- Use storytelling: connect the dots between data points
-- Be specific: use actual numbers, names, and examples
-- Be actionable: every insight should lead to a decision or action
-- Be balanced: acknowledge both risks and opportunities
-- Use formatting (bold, bullets, sections) to make it scannable
-- Think like a trusted advisor: be honest about problems and realistic about solutions
-
-Write this report as if you're presenting it to the CEO and Board. They trust your judgment and need you to tell them what's really happening and what they need to do about it.
-"""
-
-                        # Make LLM request
-                        brief_response = safe_llm_request(
-                            llm_config.get('provider', ''),
-                            llm_config.get('model', ''),
-                            llm_config.get('api_key', ''),
-                            llm_config.get('temperature', 0.3),  # Slightly higher for more creative insights
-                            llm_config.get('timeout', 180),  # Longer timeout for complex analysis
-                            prompt
-                        )
-
-                        st.session_state.portfolio_executive_brief = brief_response
-
-                    except Exception as e:
-                        st.error(f"Failed to generate portfolio brief: {e}")
-                        import traceback
-                        st.error(f"Detailed error: {traceback.format_exc()}")
-
-            # Display brief if generated
-            if "portfolio_executive_brief" in st.session_state:
-                brief = st.session_state.portfolio_executive_brief
-                if brief.startswith("Error:") or brief == "No API key available":
-                    if brief == "No API key available":
-                        st.warning("⚠️ No API key available. Please upload an API key file in File Management.")
-                    else:
-                        st.error(brief)
-                else:
-                    st.markdown("#### 📄 Executive Portfolio Report")
-                    st.markdown(brief)
-
-                    # Download button
-                    st.download_button(
-                        "📥 Download Portfolio Brief",
-                        brief,
-                        file_name=f"portfolio_executive_brief_{datetime.now().strftime('%Y%m%d')}.md",
-                        mime="text/markdown",
-                        key="download_portfolio_brief"
-                    )
-
-
+    
     # Sidebar with executive styling
     with st.sidebar:
         st.markdown('<div class="section-header">⚙️ Executive Controls</div>', unsafe_allow_html=True)
