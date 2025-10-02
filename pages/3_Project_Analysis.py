@@ -1850,7 +1850,11 @@ def safe_llm_request(provider: str, model: str, api_key: str,
             return data["choices"][0]["message"]["content"].strip()
             
         elif provider == "Gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model.strip()}:generateContent"
+            # Ensure model has the correct format (without 'models/' prefix in the name itself)
+            model_name = model.strip()
+            if not model_name.startswith('models/'):
+                model_name = f"models/{model_name}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
             headers = {
                 "Content-Type": "application/json"
             }
@@ -1871,22 +1875,44 @@ def safe_llm_request(provider: str, model: str, api_key: str,
                 ],
                 "generationConfig": {
                     "temperature": float(temperature),
-                    "maxOutputTokens": 2000
+                    "maxOutputTokens": 8000  # Increased from 2000 to allow longer responses
                 }
             }
-            
+
             response = requests.post(url, headers=headers, params=params, json=payload, timeout=timeout_sec)
             response.raise_for_status()
             data = response.json()
-            
+
+            # Debug: Log the response structure
             if 'candidates' not in data or not data['candidates']:
-                return "Error: Invalid response from Gemini API"
-            
+                return f"Error: Invalid response from Gemini API. Response keys: {list(data.keys())}"
+
             candidate = data['candidates'][0]
-            if 'content' not in candidate or 'parts' not in candidate['content']:
-                return "Error: Unexpected response format from Gemini API"
-                
-            return candidate['content']['parts'][0]['text'].strip()
+
+            # Check for finish reason (if response was truncated)
+            finish_reason = candidate.get('finishReason', 'UNKNOWN')
+
+            if 'content' not in candidate:
+                return f"Error: No 'content' in candidate. Candidate keys: {list(candidate.keys())}"
+
+            if 'parts' not in candidate['content']:
+                return f"Error: No 'parts' in content. Content keys: {list(candidate['content'].keys())}"
+
+            if not candidate['content']['parts']:
+                return f"Error: Empty 'parts' list in response"
+
+            if 'text' not in candidate['content']['parts'][0]:
+                return f"Error: No 'text' in parts[0]. Parts[0] keys: {list(candidate['content']['parts'][0].keys())}"
+
+            response_text = candidate['content']['parts'][0]['text'].strip()
+
+            # Add warning if response was truncated
+            if finish_reason == 'MAX_TOKENS':
+                response_text += "\n\n⚠️ **Note**: Response was truncated due to length limits. Consider increasing maxOutputTokens."
+            elif finish_reason not in ['STOP', 'UNKNOWN']:
+                response_text += f"\n\n⚠️ **Note**: Response ended with reason: {finish_reason}"
+
+            return response_text
         
         else:
             return f"Error: Unsupported provider '{provider}'"
@@ -3469,7 +3495,10 @@ def main():
                             st.error(brief)
                     else:
                         st.markdown("#### 📄 Executive Summary Report")
-                        st.markdown(brief)
+                        # Clean up LaTeX/math formatting issues from LLM response
+                        # Replace inline math delimiters that shouldn't be interpreted as LaTeX
+                        cleaned_brief = brief.replace('$', r'\$')  # Escape dollar signs to prevent LaTeX rendering
+                        st.markdown(cleaned_brief)
                         st.download_button("📥 Download Brief", brief, file_name=f"executive_brief_{selected_project_id}.md", mime="text/markdown")
             
             with tab4:

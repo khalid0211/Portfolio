@@ -2384,7 +2384,10 @@ Write this report as if you're presenting it to the CEO and Board. They trust yo
                         st.error(brief)
                 else:
                     st.markdown("#### 📄 Executive Portfolio Report")
-                    st.markdown(brief)
+                    # Clean up LaTeX/math formatting issues from LLM response
+                    # Replace inline math delimiters that shouldn't be interpreted as LaTeX
+                    cleaned_brief = brief.replace('$', r'\$')  # Escape dollar signs to prevent LaTeX rendering
+                    st.markdown(cleaned_brief)
 
                     # Download button
                     st.download_button(

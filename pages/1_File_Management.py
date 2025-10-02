@@ -769,28 +769,54 @@ def render_llm_provider_section():
     st.markdown('<div class="file-section">', unsafe_allow_html=True)
     st.markdown('<div class="section-header">D. LLM Provider (Executive Brief)</div>', unsafe_allow_html=True)
 
+    # Initialize saved LLM config from session state
+    saved_llm_config = st.session_state.config_dict.get('llm_config', {})
+    saved_provider = saved_llm_config.get('provider', 'OpenAI')
+
+    # Determine default index for provider radio
+    provider_options = ["OpenAI", "Gemini"]
+    provider_index = provider_options.index(saved_provider) if saved_provider in provider_options else 0
+
     provider = st.radio(
         "Choose Provider",
-        ["OpenAI", "Gemini"],
-        index=0,
+        provider_options,
+        index=provider_index,
         key="llm_provider"
     )
 
     # Model selection based on provider
     if provider == "OpenAI":
-        openai_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+        # Use fetched models if available, otherwise use defaults
+        if 'openai_available_models' in st.session_state and st.session_state.openai_available_models:
+            openai_models = st.session_state.openai_available_models
+        else:
+            openai_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+
+        # Get saved model or use default
+        saved_model = saved_llm_config.get('model', 'gpt-4o-mini') if saved_provider == 'OpenAI' else 'gpt-4o-mini'
+        model_index = openai_models.index(saved_model) if saved_model in openai_models else min(1, len(openai_models)-1)
+
         selected_model = st.selectbox(
             "OpenAI Model",
             openai_models,
-            index=1,  # Default to gpt-4o-mini
+            index=model_index,
             key="openai_model"
         )
     else:  # Gemini
-        gemini_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+        # Use fetched models if available, otherwise use defaults
+        if 'gemini_available_models' in st.session_state and st.session_state.gemini_available_models:
+            gemini_models = st.session_state.gemini_available_models
+        else:
+            gemini_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+
+        # Get saved model or use default
+        saved_model = saved_llm_config.get('model', 'gemini-1.5-flash') if saved_provider == 'Gemini' else 'gemini-1.5-flash'
+        model_index = gemini_models.index(saved_model) if saved_model in gemini_models else min(1, len(gemini_models)-1)
+
         selected_model = st.selectbox(
             "Gemini Model",
             gemini_models,
-            index=1,  # Default to gemini-1.5-flash
+            index=model_index,
             key="gemini_model"
         )
 
@@ -829,6 +855,84 @@ def render_llm_provider_section():
         key="llm_timeout",
         help="Maximum time to wait for LLM response"
     )
+
+    # Test Connection Button
+    st.markdown("---")
+    st.markdown("### 🔌 Test Connection")
+
+    if api_key:
+        if st.button("🧪 Test API Connection", key="test_api_connection", type="primary"):
+            with st.spinner(f"Testing {provider} connection..."):
+                import requests
+
+                try:
+                    if provider == "OpenAI":
+                        # Test OpenAI connection
+                        url = "https://api.openai.com/v1/models"
+                        headers = {
+                            "Authorization": f"Bearer {api_key.strip()}"
+                        }
+                        response = requests.get(url, headers=headers, timeout=10)
+
+                        if response.status_code == 200:
+                            st.success(f"✅ OpenAI API connection successful!")
+                            models_data = response.json()
+                            if 'data' in models_data:
+                                # Extract chat models (gpt models)
+                                all_models = [model['id'] for model in models_data['data']]
+                                chat_models = [m for m in all_models if m.startswith('gpt-')]
+
+                                # Store in session state and trigger rerun
+                                st.session_state.openai_available_models = chat_models
+                                st.info(f"📋 Found {len(chat_models)} GPT models - Model list updated!")
+                                st.success("🔄 Refresh the page to see updated model list")
+                        else:
+                            st.error(f"❌ Connection failed: HTTP {response.status_code}")
+                            st.code(response.text)
+
+                    elif provider == "Gemini":
+                        # Test Gemini connection by listing models
+                        url = "https://generativelanguage.googleapis.com/v1beta/models"
+                        params = {"key": api_key.strip()}
+
+                        response = requests.get(url, params=params, timeout=10)
+
+                        if response.status_code == 200:
+                            st.success(f"✅ Gemini API connection successful!")
+                            models_data = response.json()
+
+                            if 'models' in models_data:
+                                # Filter models that support generateContent
+                                generate_models = [m for m in models_data['models']
+                                                 if 'generateContent' in m.get('supportedGenerationMethods', [])]
+
+                                # Extract short names (remove 'models/' prefix)
+                                available_models = [model['name'].replace('models/', '') for model in generate_models]
+
+                                # Store in session state
+                                st.session_state.gemini_available_models = available_models
+
+                                st.info(f"📋 Found {len(available_models)} models with generateContent support")
+                                st.success("✅ Model list updated! Available models:")
+
+                                # Show available models
+                                for model_name in available_models:
+                                    st.text(f"  • {model_name}")
+
+                                # Auto-rerun to update dropdown
+                                st.rerun()
+                        else:
+                            st.error(f"❌ Connection failed: HTTP {response.status_code}")
+                            st.code(response.text)
+
+                except requests.exceptions.Timeout:
+                    st.error("❌ Connection timeout - check your internet connection")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"❌ Connection error: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error: {str(e)}")
+    else:
+        st.warning("⚠️ Upload an API key first to test the connection")
 
     llm_config = {
         'provider': provider,
