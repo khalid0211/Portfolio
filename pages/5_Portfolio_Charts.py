@@ -341,9 +341,9 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
 
         bac = row.get("bac", row.get("BAC", 0.0))
         ac = row.get("ac", row.get("AC", 0.0))
-        earned_value = row.get("earned_value", 0.0)
-        cpi = row.get("cost_performance_index", 0.0)
-        spi = row.get("schedule_performance_index", 0.0)
+        earned_value = row.get("ev", row.get("EV", 0.0))
+        cpi = row.get("cpi", row.get("CPI", 0.0))
+        spi = row.get("spi", row.get("SPI", 0.0))
         actual_duration = row.get("actual_duration_months", 0.0)
         original_duration = row.get("original_duration_months", 0.0)
 
@@ -375,7 +375,7 @@ def build_segments(df: pd.DataFrame, show_predicted: bool) -> List[Dict]:
 
         # Get OD (Original Duration) and LD (Likely Duration)
         od = original_duration
-        ld = row.get("likely_duration", 0.0)
+        ld = row.get("ld", row.get("likely_duration", 0.0))
 
         # Calculate dates based on OD, LD, and % Work Completed
         # Green segment: From Plan Start to (Plan Start + OD * % Work Completed)
@@ -665,8 +665,8 @@ def render_cash_flow_chart(filtered_df: pd.DataFrame, start_col: str = None, fin
                                                 continue
                                     else:  # Predicted
                                         # Use Likely Duration (LD) with cap check
-                                        if 'likely_duration' in row and pd.notna(row.get('likely_duration')):
-                                            ld = row['likely_duration']
+                                        if 'ld' in row and pd.notna(row.get('ld')):
+                                            ld = row['ld']
                                             # Get OD for cap calculation
                                             if 'original_duration_months' in row and pd.notna(row.get('original_duration_months')):
                                                 od = row['original_duration_months']
@@ -727,7 +727,7 @@ def render_cash_flow_chart(filtered_df: pd.DataFrame, start_col: str = None, fin
                                             continue
 
                                     # Get AC (Actual Cost)
-                                    ac = row.get('ac', row.get('AC', row.get('actual_cost', row.get('Actual Cost', 0))))
+                                    ac = row.get('ac', row.get('AC', row.get('Actual Cost', 0)))
 
                                     # Get AD (Actual Duration)
                                     if 'actual_duration_months' in row and pd.notna(row.get('actual_duration_months')):
@@ -1202,14 +1202,14 @@ def render_time_budget_performance(filtered_df: pd.DataFrame) -> None:
                 'tier': tier,
                 'color': color,
                 'bac': budget,
-                'spi': project.get('schedule_performance_index', project.get('SPI', 0)),
-                'cpi': project.get('cost_performance_index', project.get('CPI', 0))
+                'spi': project.get('spi', project.get('SPI', 0)),
+                'cpi': project.get('cpi', project.get('CPI', 0))
             })
 
         if performance_data:
             # Calculate portfolio-level SPI and CPI for display
-            spi_col = 'schedule_performance_index' if 'schedule_performance_index' in filtered_df.columns else 'SPI'
-            cpi_col = 'cost_performance_index' if 'cost_performance_index' in filtered_df.columns else 'CPI'
+            spi_col = 'spi' if 'spi' in filtered_df.columns else 'SPI'
+            cpi_col = 'cpi' if 'cpi' in filtered_df.columns else 'CPI'
             portfolio_spi = filtered_df[spi_col].mean() if spi_col in filtered_df.columns else 1.0
             portfolio_cpi = filtered_df[cpi_col].mean() if cpi_col in filtered_df.columns else 1.0
 
@@ -1396,8 +1396,8 @@ def render_portfolio_performance_curve(filtered_df: pd.DataFrame) -> None:
     )
 
     # Check for required columns (allow both lowercase and uppercase variants)
-    cpi_col = 'cost_performance_index' if 'cost_performance_index' in filtered_df.columns else 'CPI'
-    spi_col = 'schedule_performance_index' if 'schedule_performance_index' in filtered_df.columns else 'SPI'
+    cpi_col = 'cpi' if 'cpi' in filtered_df.columns else 'CPI'
+    spi_col = 'spi' if 'spi' in filtered_df.columns else 'SPI'
     budget_col = 'bac' if 'bac' in filtered_df.columns else 'BAC' if 'BAC' in filtered_df.columns else 'Budget'
     project_name_col = 'project_name' if 'project_name' in filtered_df.columns else 'Project Name'
 
@@ -1666,8 +1666,8 @@ def render_portfolio_treemap(filtered_df: pd.DataFrame) -> None:
                 # Project-level treemap with tier colors
                 if len(plot_df) > 0:
                     # Check for CPI and SPI columns
-                    cpi_col = 'cost_performance_index' if 'cost_performance_index' in plot_df.columns else 'CPI'
-                    spi_col = 'schedule_performance_index' if 'schedule_performance_index' in plot_df.columns else 'SPI'
+                    cpi_col = 'cpi' if 'cpi' in plot_df.columns else 'CPI'
+                    spi_col = 'spi' if 'spi' in plot_df.columns else 'SPI'
 
                     fig_treemap = px.treemap(
                         plot_df,
@@ -2103,8 +2103,8 @@ def render_approvals_chart(filtered_df: pd.DataFrame) -> None:
 
                             # Get financial values
                             ac = row.get('ac', row.get('Actual Cost', 0))
-                            ev = row.get('earned_value', row.get('Earned Value', 0))
-                            eac = row.get('estimate_at_completion', row.get('EAC', 0))
+                            ev = row.get('ev', row.get('Earned Value', 0))
+                            eac = row.get('eac', row.get('EAC', 0))
                             project_name = row.get('project_name', row.get('Project Name', 'Unknown'))
 
                             # Assign tier

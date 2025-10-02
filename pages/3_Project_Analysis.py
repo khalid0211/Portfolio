@@ -551,8 +551,8 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
         # Portfolio totals
         total_bac = valid_results['bac'].sum() if 'bac' in valid_results else 0
         total_ac = valid_results['ac'].sum() if 'ac' in valid_results else 0
-        total_pv = valid_results['planned_value'].sum() if 'planned_value' in valid_results else 0
-        total_ev = valid_results['earned_value'].sum() if 'earned_value' in valid_results else 0
+        total_pv = valid_results['pv'].sum() if 'pv' in valid_results else 0
+        total_ev = valid_results['ev'].sum() if 'ev' in valid_results else 0
 
         # Present value calculations - sum the new financial metrics directly
         # Removed Present Value Progress - duplicate of Present Value
@@ -621,8 +621,8 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
 
         for _, row in valid_results.iterrows():
             project_bac = row.get('bac', 0)
-            project_cpi = row.get('cost_performance_index', 0)
-            project_spi = row.get('schedule_performance_index', 0)
+            project_cpi = row.get('cpi', 0)
+            project_spi = row.get('spi', 0)
             project_ad = row.get('actual_duration_months', 0)
             project_od = row.get('original_duration_months', 0)
 
@@ -660,8 +660,8 @@ def calculate_portfolio_summary(batch_results_df: pd.DataFrame) -> Dict[str, Any
         }
         
         for _, row in valid_results.iterrows():
-            cpi = row.get('cost_performance_index', 0)
-            spi = row.get('schedule_performance_index', 0)
+            cpi = row.get('cpi', 0)
+            spi = row.get('spi', 0)
             project_bac = row.get('bac', 0)
             
             if cpi >= 1.0 and spi >= 1.0:
@@ -1356,23 +1356,23 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev=None,
         
         return {
             'percent_complete': round(percent_complete * 100, 2),
-            'earned_value': round(earned_value, 2),
-            'cost_variance': round(cost_variance, 2),
-            'schedule_variance': round(schedule_variance, 2),
-            'cost_performance_index': round(cpi, 3) if is_valid_finite_number(cpi) and not (pd.isna(cpi) or math.isnan(cpi)) else cpi,
-            'schedule_performance_index': round(spi, 3) if is_valid_finite_number(spi) and not (pd.isna(spi) or math.isnan(spi)) else spi,
-            'estimate_at_completion': round(eac, 2) if is_valid_finite_number(eac) else float("inf"),
-            'estimate_to_complete': round(etc, 2) if is_valid_finite_number(etc) else float("inf"),
-            'variance_at_completion': round(vac, 2) if is_valid_finite_number(vac) else float("-inf"),
+            'ev': round(earned_value, 2),
+            'cv': round(cost_variance, 2),
+            'sv': round(schedule_variance, 2),
+            'cpi': round(cpi, 3) if is_valid_finite_number(cpi) and not (pd.isna(cpi) or math.isnan(cpi)) else cpi,
+            'spi': round(spi, 3) if is_valid_finite_number(spi) and not (pd.isna(spi) or math.isnan(spi)) else spi,
+            'eac': round(eac, 2) if is_valid_finite_number(eac) else float("inf"),
+            'etc': round(etc, 2) if is_valid_finite_number(etc) else float("inf"),
+            'vac': round(vac, 2) if is_valid_finite_number(vac) else float("-inf"),
         }
         
     except ValueError as e:
         logger.error(f"EVM metrics calculation failed: {e}")
         return {
-            'percent_complete': 0.0, 'earned_value': 0.0, 'cost_variance': 0.0,
-            'schedule_variance': 0.0, 'cost_performance_index': 0.0,
-            'schedule_performance_index': 0.0, 'estimate_at_completion': float("inf"),
-            'estimate_to_complete': float("inf"), 'variance_at_completion': float("-inf")
+            'percent_complete': 0.0, 'ev': 0.0, 'cv': 0.0,
+            'sv': 0.0, 'cpi': 0.0,
+            'spi': 0.0, 'eac': float("inf"),
+            'etc': float("inf"), 'vac': float("-inf")
         }
 
 def find_earned_schedule_linear(earned_value, bac, total_duration) -> float:
@@ -1467,7 +1467,7 @@ def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_du
             fcomp_str = "N/A"
         
         return {
-            'earned_schedule': round(earned_schedule, 2),
+            'es': round(earned_schedule, 2),
             'spie': round(spie, 3),
             'forecast_duration': int(forecast_duration_rounded) if forecast_duration_rounded is not None else None,
             'forecast_completion': fcomp_str
@@ -1476,7 +1476,7 @@ def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_du
     except (ValueError, OverflowError) as e:
         logger.error(f"Earned schedule metrics calculation failed: {e}")
         return {
-            'earned_schedule': 0.0,
+            'es': 0.0,
             'spie': 1.0,
             'forecast_duration': None,
             'forecast_completion': "N/A"
@@ -1508,9 +1508,9 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         evm_metrics = calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev, use_manual_ev)
         
         if curve_type.lower() == 's-curve':
-            earned_schedule = find_earned_schedule_scurve(evm_metrics['earned_value'], bac, original_duration, alpha, beta)
+            earned_schedule = find_earned_schedule_scurve(evm_metrics['ev'], bac, original_duration, alpha, beta)
         else:
-            earned_schedule = find_earned_schedule_linear(evm_metrics['earned_value'], bac, original_duration)
+            earned_schedule = find_earned_schedule_linear(evm_metrics['ev'], bac, original_duration)
         
         es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, parsed_plan_start, original_duration)
         
@@ -1545,7 +1545,7 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
             'actual_duration_months': actual_duration,
             'original_duration_months': original_duration,
             'present_value': present_value,
-            'planned_value': planned_value,
+            'pv': planned_value,
             'percent_budget_used': percent_budget_used,
             'percent_time_used': percent_time_used,
             'use_manual_pv': use_manual_pv,
@@ -1619,18 +1619,18 @@ def format_batch_results_for_download(batch_df: pd.DataFrame) -> pd.DataFrame:
         'Likely Dur': 'forecast_duration',
         'Actual Cost': 'ac',
         'Present Value': 'present_value',
-        'Plan Value': 'planned_value',
-        'Earned Value': 'earned_value',
+        'Plan Value': 'pv',
+        'Earned Value': 'ev',
         # 'Present Value Progress': 'present_value_progress', # Removed duplicate
         'Planned Value Project': 'planned_value_project',
         'Likely Value Project': 'likely_value_project',
         '% Present Value Project': 'percent_present_value_project',
         '% Likely Value Project': 'percent_likely_value_project',
-        'CPI': 'cost_performance_index',
-        'SPI': 'schedule_performance_index',
+        'CPI': 'cpi',
+        'SPI': 'spi',
         'SPIe': 'spie',
-        'ETC': 'estimate_to_complete',
-        'EAC': 'estimate_at_completion'
+        'ETC': 'etc',
+        'EAC': 'eac'
     }
 
     # Build the formatted DataFrame
@@ -1670,21 +1670,21 @@ def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: st
     # Apply formatting to specific columns (moved to percentage_cols section below)
 
     # Format currency columns including new financial analysis fields
-    currency_cols = ['bac', 'ac', 'planned_value', 'earned_value', 'present_value',
-                     'planned_value_project', 'likely_value_project', 'estimate_to_complete', 'estimate_at_completion']
+    currency_cols = ['bac', 'ac', 'pv', 'ev', 'present_value',
+                     'planned_value_project', 'likely_value_project', 'etc', 'eac']
     for col in currency_cols:
         if col in display_df.columns:
             new_col_name = {
                 'bac': 'Budget',
                 'ac': 'Actual Cost',
-                'planned_value': 'Plan Value',
-                'earned_value': 'Earned Value',
+                'pv': 'Plan Value',
+                'ev': 'Earned Value',
                 'present_value': 'Present Value',
                 # 'present_value_progress': 'Present Value Progress', # Removed duplicate
                 'planned_value_project': 'Planned Value Project',
                 'likely_value_project': 'Likely Value Project',
-                'estimate_to_complete': 'ETC',
-                'estimate_at_completion': 'EAC'
+                'etc': 'ETC',
+                'eac': 'EAC'
             }.get(col, col)
             display_df[new_col_name] = display_df[col].apply(lambda x: format_currency(x, currency_symbol, currency_postfix) if pd.notna(x) else "—")
 
@@ -1701,10 +1701,10 @@ def format_batch_results_for_display(batch_df: pd.DataFrame, currency_symbol: st
             display_df[new_col_name] = display_df[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "—")
 
     # Format performance indices
-    perf_cols = ['cost_performance_index', 'schedule_performance_index', 'spie']
+    perf_cols = ['cpi', 'spi', 'spie']
     for col in perf_cols:
         if col in display_df.columns:
-            new_col_name = {'cost_performance_index': 'CPI', 'schedule_performance_index': 'SPI', 'spie': 'SPIe'}.get(col, col)
+            new_col_name = {'cpi': 'CPI', 'spi': 'SPI', 'spie': 'SPIe'}.get(col, col)
             display_df[new_col_name] = display_df[col].apply(lambda x: format_performance_index(x) if pd.notna(x) else "N/A")
 
     # Format duration columns
@@ -3100,12 +3100,12 @@ def render_enhanced_inputs_tab(project_data: Dict, results: Dict, controls: Dict
     # Row 2: Planned Value (PV) and Earned Value (EV)
     col3, col4 = st.columns(2)
     with col3:
-        pv_formatted = format_currency(results['planned_value'], controls['currency_symbol'], controls['currency_postfix'])
+        pv_formatted = format_currency(results['pv'], controls['currency_symbol'], controls['currency_postfix'])
         use_manual_pv = results.get('use_manual_pv', False)
         pv_label = f"📊 **Planned Value (PV{'**' if not use_manual_pv else ''})**"
         st.markdown(f'<div class="financial-metric">{pv_label}<br><span class="financial-value">{pv_formatted}</span></div>', unsafe_allow_html=True)
     with col4:
-        ev_formatted = format_currency(results['earned_value'], controls['currency_symbol'], controls['currency_postfix'])
+        ev_formatted = format_currency(results['ev'], controls['currency_symbol'], controls['currency_postfix'])
         use_manual_ev = results.get('use_manual_ev', False)
         ev_label = f"💎 **Earned Value (EV{'**' if not use_manual_ev else ''})**"
         st.markdown(f'<div class="financial-metric">{ev_label}<br><span class="financial-value">{ev_formatted}</span></div>', unsafe_allow_html=True)
@@ -3138,14 +3138,14 @@ def render_enhanced_inputs_tab(project_data: Dict, results: Dict, controls: Dict
     # Row 1: CPI and SPI
     col1, col2 = st.columns(2)
     with col1:
-        cpi = results['cost_performance_index']
+        cpi = results['cpi']
         delta_cpi = f"{cpi - 1:.2f}" if is_valid_finite_number(cpi) else "N/A"
         status_cpi = "normal" if cpi >= 1.0 else "inverse"
         st.metric("Cost Performance Index (CPI)", format_performance_index(cpi), 
                  delta=delta_cpi, delta_color=status_cpi)
     
     with col2:
-        spi = results['schedule_performance_index']
+        spi = results['spi']
         delta_spi = f"{spi - 1:.2f}" if is_valid_finite_number(spi) else "N/A"
         status_spi = "normal" if spi >= 1.0 else "inverse"
         st.metric("Schedule Performance Index (SPI)", format_performance_index(spi),
@@ -3192,13 +3192,13 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
     # Calculate derived metrics
     bac = results.get('bac', 0)
     ac = results.get('ac', 0)
-    pv = results.get('planned_value', 0)
-    ev = results.get('earned_value', 0)
-    cpi = results.get('cost_performance_index', 0)
-    spi = results.get('schedule_performance_index', 0)
+    pv = results.get('pv', 0)
+    ev = results.get('ev', 0)
+    cpi = results.get('cpi', 0)
+    spi = results.get('spi', 0)
     spie = results.get('spie', 0)
-    cv = results.get('cost_variance', 0)
-    sv = results.get('schedule_variance', 0)
+    cv = results.get('cv', 0)
+    sv = results.get('sv', 0)
     
     # Status indicators
     def get_status_color(value, good_threshold=1.0):
@@ -3256,9 +3256,9 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
         
         # Forecasts
         ("🔮 FORECASTS", "", "", ""),
-        ("Estimate at Completion (EAC)", "BAC ÷ CPI", fmt_curr(results.get('estimate_at_completion')) if is_valid_finite_number(results.get('estimate_at_completion')) else "Cannot determine", ""),
-        ("Variance at Completion (VAC)", "BAC - EAC", fmt_curr(results.get('variance_at_completion')) if is_valid_finite_number(results.get('variance_at_completion')) else "Cannot determine", ""),
-        ("Estimate to Complete (ETC)", "EAC - AC", fmt_curr(results.get('estimate_to_complete')) if is_valid_finite_number(results.get('estimate_to_complete')) else "Cannot determine", ""),
+        ("Estimate at Completion (EAC)", "BAC ÷ CPI", fmt_curr(results.get('eac')) if is_valid_finite_number(results.get('eac')) else "Cannot determine", ""),
+        ("Variance at Completion (VAC)", "BAC - EAC", fmt_curr(results.get('vac')) if is_valid_finite_number(results.get('vac')) else "Cannot determine", ""),
+        ("Estimate to Complete (ETC)", "EAC - AC", fmt_curr(results.get('etc')) if is_valid_finite_number(results.get('etc')) else "Cannot determine", ""),
         ("", "", "", ""),  # Spacer
         
         # Progress Analysis
@@ -3272,7 +3272,7 @@ def build_enhanced_results_table(results: dict, controls: dict, project_data: di
         ("📅 SCHEDULE ANALYSIS", "", "", ""),
         ("Original Duration", "Planned months", format_duration(results['original_duration_months']), ""),
         ("Elapsed Duration", "Months to date", format_duration(results['actual_duration_months']), ""),
-        ("Earned Schedule", "Time where PV = EV", format_duration(results['earned_schedule']), ""),
+        ("Earned Schedule", "Time where PV = EV", format_duration(results['es']), ""),
         ("Expected Duration", "OD ÷ SPIe", format_duration(results.get('forecast_duration', 0)) if results.get('forecast_duration') else "Cannot determine", ""),
         ("Expected Finish Date", "Based on current performance", format_date_dmy(results.get('forecast_completion', 'N/A')), ""),
     ]
@@ -3488,11 +3488,11 @@ def main():
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                cpi = results['cost_performance_index']
+                cpi = results['cpi']
                 cpi_status = "🟢" if cpi >= 1.0 else "🟡" if cpi >= 0.9 else "🔴"
                 st.metric("Cost Performance", f"{cpi_status} {format_performance_index(cpi)}", f"{cpi - 1:.2f}")
             with col2:
-                spi = results['schedule_performance_index']
+                spi = results['spi']
                 spi_status = "🟢" if spi >= 1.0 else "🟡" if spi >= 0.9 else "🔴"
                 st.metric("Schedule Performance", f"{spi_status} {format_performance_index(spi)}", f"{spi - 1:.2f}")
             with col3:
@@ -3536,8 +3536,8 @@ def main():
                 FINANCIALS:
                 - Budget (BAC): {format_currency(results['bac'], controls['currency_symbol'], controls['currency_postfix'])}
                 - Actual Cost (AC): {format_currency(results['ac'], controls['currency_symbol'], controls['currency_postfix'])}
-                - Earned Value (EV{'**' if not results.get('use_manual_ev', False) else ''}): {format_currency(results['earned_value'], controls['currency_symbol'], controls['currency_postfix'])}
-                - Planned Value (PV{'**' if not results.get('use_manual_pv', False) else ''}): {format_currency(results['planned_value'], controls['currency_symbol'], controls['currency_postfix'])}
+                - Earned Value (EV{'**' if not results.get('use_manual_ev', False) else ''}): {format_currency(results['ev'], controls['currency_symbol'], controls['currency_postfix'])}
+                - Planned Value (PV{'**' if not results.get('use_manual_pv', False) else ''}): {format_currency(results['pv'], controls['currency_symbol'], controls['currency_postfix'])}
 
                 SCHEDULE:
                 - Plan Start: {results['plan_start']}
@@ -3546,14 +3546,14 @@ def main():
                 - Physical Completion: {format_percentage(results['percent_complete'])}
 
                 PERFORMANCE INDICES:
-                - Cost Performance (CPI): {format_performance_index(results['cost_performance_index'])}
-                - Schedule Performance (SPI): {format_performance_index(results['schedule_performance_index'])}
+                - Cost Performance (CPI): {format_performance_index(results['cpi'])}
+                - Schedule Performance (SPI): {format_performance_index(results['spi'])}
                 - Budget Utilization: {format_percentage(safe_divide(results['ac'], results['bac']) * 100)}
                 - Time Utilization: {format_percentage(safe_divide(results['actual_duration_months'], results['original_duration_months']) * 100)}
 
                 FORECASTS:
-                - Estimate at Completion (EAC): {format_currency(results['estimate_at_completion'], controls['currency_symbol'], controls['currency_postfix']) if is_valid_finite_number(results['estimate_at_completion']) else 'Cannot determine'}
-                - Variance at Completion (VAC): {format_currency(results['variance_at_completion'], controls['currency_symbol'], controls['currency_postfix']) if is_valid_finite_number(results['variance_at_completion']) else 'Cannot determine'}
+                - Estimate at Completion (EAC): {format_currency(results['eac'], controls['currency_symbol'], controls['currency_postfix']) if is_valid_finite_number(results['eac']) else 'Cannot determine'}
+                - Variance at Completion (VAC): {format_currency(results['vac'], controls['currency_symbol'], controls['currency_postfix']) if is_valid_finite_number(results['vac']) else 'Cannot determine'}
 
                 STRUCTURE YOUR RESPONSE AS FOLLOWS:
 
@@ -3664,7 +3664,7 @@ def main():
                     
                     # Chart 1: Performance Matrix (CPI vs SPI)
                     ax1 = plt.subplot(2, 3, 1)
-                    cpi, spi = results['cost_performance_index'], results['schedule_performance_index']
+                    cpi, spi = results['cpi'], results['spi']
                     
                     # Performance quadrants background - proper rectangular fills
                     # Q1: SPI>=1, CPI>=1 (top right) - Green
@@ -3715,7 +3715,7 @@ def main():
                     
                     # Calculate normalized time and earned value
                     normalized_time = safe_divide(results['actual_duration_months'], results['original_duration_months'])
-                    normalized_ev = safe_divide(results['earned_value'], results['bac'])
+                    normalized_ev = safe_divide(results['ev'], results['bac'])
                     normalized_data_date = normalized_time
                     
                     # Create normalized time array from 0 to 1
@@ -3760,14 +3760,14 @@ def main():
                         pv_values = [calculate_pv_scurve(results['bac'], t, total_months, controls['alpha'], controls['beta']) for t in timeline]
                         if actual_months > 0:
                             ac_values = [calculate_pv_scurve(results['ac'], t, actual_months, controls['alpha'], controls['beta']) for t in actual_timeline]
-                            ev_values = [calculate_pv_scurve(results['earned_value'], t, actual_months, controls['alpha'], controls['beta']) for t in actual_timeline]
+                            ev_values = [calculate_pv_scurve(results['ev'], t, actual_months, controls['alpha'], controls['beta']) for t in actual_timeline]
                         else:
                             ac_values, ev_values = [0], [0]
                     else:
                         pv_values = [calculate_pv_linear(results['bac'], t, total_months) for t in timeline]
                         if actual_months > 0:
                             ac_values = [calculate_pv_linear(results['ac'], t, actual_months) for t in actual_timeline]
-                            ev_values = [calculate_pv_linear(results['earned_value'], t, actual_months) for t in actual_timeline]
+                            ev_values = [calculate_pv_linear(results['ev'], t, actual_months) for t in actual_timeline]
                         else:
                             ac_values, ev_values = [0], [0]
                     

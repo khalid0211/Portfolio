@@ -741,10 +741,10 @@ def render_batch_calculation_section():
                         batch_results = st.session_state.data_df.copy()
 
                         # Add basic calculated columns
-                        if 'cost_performance_index' not in batch_results.columns:
-                            batch_results['cost_performance_index'] = 1.0
-                        if 'schedule_performance_index' not in batch_results.columns:
-                            batch_results['schedule_performance_index'] = 1.0
+                        if 'cpi' not in batch_results.columns:
+                            batch_results['cpi'] = 1.0
+                        if 'spi' not in batch_results.columns:
+                            batch_results['spi'] = 1.0
                         if 'spie' not in batch_results.columns:
                             batch_results['spie'] = 1.0
 

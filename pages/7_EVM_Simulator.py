@@ -241,8 +241,8 @@ ev = bac * (percent_complete / 100)
 time_elapsed_pct = (actual_duration / original_duration) * 100 if original_duration > 0 else 0
 budget_utilized_pct = (ac / bac) * 100 if bac > 0 else 0
 
-# Calculate PV based on method and find Earned Duration for SPIe
-earned_duration = None
+# Calculate PV based on method and find Earned Schedule (ES) for SPIe
+es = None
 spie = None
 
 if pv_method == "Linear Curve":
@@ -250,11 +250,11 @@ if pv_method == "Linear Curve":
     time_ratio = actual_duration / original_duration if original_duration > 0 else 0
     pv = bac * min(time_ratio, 1.0)
 
-    # Find Earned Duration where PV = EV
+    # Find Earned Schedule (ES) where PV = EV
     if ev > 0 and bac > 0:
         ev_ratio = ev / bac
-        earned_duration = ev_ratio * original_duration
-        spie = earned_duration / actual_duration if actual_duration > 0 else 0
+        es = ev_ratio * original_duration
+        spie = es / actual_duration if actual_duration > 0 else 0
 
 elif pv_method == "S-Curve":
     # S-curve: PV at current time
@@ -262,18 +262,18 @@ elif pv_method == "S-Curve":
     s_curve_value = calculate_s_curve_value(time_ratio)
     pv = bac * s_curve_value
 
-    # Find Earned Duration where S-curve PV = EV using iterative search
+    # Find Earned Schedule (ES) where S-curve PV = EV using iterative search
     if ev > 0 and bac > 0:
         ev_ratio = ev / bac
         # Search for time where s-curve equals ev_ratio
         for search_day in range(1, int(original_duration * 2)):
             search_ratio = search_day / original_duration
             if calculate_s_curve_value(search_ratio) >= ev_ratio:
-                earned_duration = search_day
+                es = search_day
                 break
 
-        if earned_duration:
-            spie = earned_duration / actual_duration if actual_duration > 0 else 0
+        if es:
+            spie = es / actual_duration if actual_duration > 0 else 0
 
 # Calculated Values - Compact professional display
 st.markdown('<div class="subsection-title">Calculated Values</div>', unsafe_allow_html=True)
@@ -333,14 +333,14 @@ else:
                 <div style="font-size: 0.7rem; color: #6c757d;">AC/BAC</div>
             </div>
             <div style="text-align: center;">
-                <div style="font-weight: 600; color: #495057;">Earned Duration (ED)</div>
-                <div style="font-size: 1rem; font-weight: 700; color: #6f42c1;">{'%.1f' % earned_duration if earned_duration is not None else 'N/A'}</div>
+                <div style="font-weight: 600; color: #495057;">Earned Schedule (ES)</div>
+                <div style="font-size: 1rem; font-weight: 700; color: #6f42c1;">{'%.1f' % es if es is not None else 'N/A'}</div>
                 <div style="font-size: 0.7rem; color: #6c757d;">Days @ PV=EV</div>
             </div>
             <div style="text-align: center;">
                 <div style="font-weight: 600; color: #495057;">SPIe</div>
                 <div style="font-size: 1rem; font-weight: 700; color: {'#28a745' if spie and spie >= 1 else '#dc3545' if spie and spie < 1 else '#6c757d'};">{'%.3f' % spie if spie is not None else 'N/A'}</div>
-                <div style="font-size: 0.7rem; color: #6c757d;">ED/UD</div>
+                <div style="font-size: 0.7rem; color: #6c757d;">ES/AD</div>
             </div>
         </div>
     </div>
@@ -508,13 +508,13 @@ if pv >= 0 and ev >= 0 and ac >= 0 and bac > 0:
             annotation_position="top"
         )
 
-        # Add earned duration line if available
-        if earned_duration:
+        # Add earned schedule line if available
+        if es:
             fig.add_vline(
-                x=earned_duration,
+                x=es,
                 line_dash="dash",
                 line_color="purple",
-                annotation_text=f"Earned Duration: {earned_duration:.1f} days",
+                annotation_text=f"Earned Schedule: {es:.1f} days",
                 annotation_position="bottom"
             )
 

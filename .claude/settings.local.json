@@ -10,7 +10,8 @@
       "Bash(dir)",
       "Bash(pip install:*)",
       "Bash(del:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

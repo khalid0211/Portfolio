@@ -494,18 +494,18 @@ def main():
 
                     # Rename batch results columns to match our display names
                     column_renames = {}
-                    if 'schedule_performance_index' in batch_df.columns:
-                        evm_columns.append('schedule_performance_index')
-                        column_renames['schedule_performance_index'] = 'SPI'
-                    if 'cost_performance_index' in batch_df.columns:
-                        evm_columns.append('cost_performance_index')
-                        column_renames['cost_performance_index'] = 'CPI'
-                    if 'earned_value' in batch_df.columns:
-                        evm_columns.append('earned_value')
-                        column_renames['earned_value'] = 'EV'
-                    if 'planned_value' in batch_df.columns:
-                        evm_columns.append('planned_value')
-                        column_renames['planned_value'] = 'PV'
+                    if 'spi' in batch_df.columns:
+                        evm_columns.append('spi')
+                        column_renames['spi'] = 'SPI'
+                    if 'cpi' in batch_df.columns:
+                        evm_columns.append('cpi')
+                        column_renames['cpi'] = 'CPI'
+                    if 'ev' in batch_df.columns:
+                        evm_columns.append('ev')
+                        column_renames['ev'] = 'EV'
+                    if 'pv' in batch_df.columns:
+                        evm_columns.append('pv')
+                        column_renames['pv'] = 'PV'
 
                     if len(evm_columns) > 1:  # More than just project ID
                         # Select only the columns we need

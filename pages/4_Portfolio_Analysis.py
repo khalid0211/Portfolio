@@ -343,12 +343,12 @@ def map_columns_to_standard(df):
         # Real batch calculation results (from Project Analysis)
         'bac': 'Budget',
         'ac': 'Actual Cost',
-        'earned_value': 'Earned Value',
-        'planned_value': 'Plan Value',
-        'estimate_to_complete': 'ETC',
-        'estimate_at_completion': 'EAC',
-        'cost_performance_index': 'CPI',
-        'schedule_performance_index': 'SPI',
+        'ev': 'Earned Value',
+        'pv': 'Plan Value',
+        'etc': 'ETC',
+        'eac': 'EAC',
+        'cpi': 'CPI',
+        'spi': 'SPI',
         'spie': 'SPIe',
         'project_name': 'Project Name',
         'project_id': 'Project ID',
@@ -356,9 +356,9 @@ def map_columns_to_standard(df):
         'project_manager': 'Project Manager',
         'plan_start': 'Plan Start',
         'plan_finish': 'Plan Finish',
-        'cost_variance': 'Cost Variance',
-        'schedule_variance': 'Schedule Variance',
-        'variance_at_completion': 'VAC',
+        'cv': 'Cost Variance',
+        'sv': 'Schedule Variance',
+        'vac': 'VAC',
         'percent_complete': 'Percent Complete',
         'actual_duration_months': 'Actual Duration',
         'original_duration_months': 'Original Duration',
@@ -1846,7 +1846,7 @@ def main():
                 # Check for duration columns and calculate metrics
                 od_col = 'original_duration_months'
                 ad_col = 'actual_duration_months'
-                ld_col = 'likely_duration'
+                ld_col = 'ld'
                 bac_col = 'bac' if 'bac' in filtered_df.columns else 'Budget'
 
                 # Initialize variables

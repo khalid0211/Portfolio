@@ -464,23 +464,23 @@ def calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev=None,
 
         return {
             'percent_complete': round(percent_complete * 100, 2),
-            'earned_value': round(earned_value, 2),
-            'cost_variance': round(cost_variance, 2),
-            'schedule_variance': round(schedule_variance, 2),
-            'cost_performance_index': round(cpi, 3) if is_valid_finite_number(cpi) and not (pd.isna(cpi) or math.isnan(cpi)) else cpi,
-            'schedule_performance_index': round(spi, 3) if is_valid_finite_number(spi) and not (pd.isna(spi) or math.isnan(spi)) else spi,
-            'estimate_at_completion': round(eac, 2) if is_valid_finite_number(eac) else float("inf"),
-            'estimate_to_complete': round(etc, 2) if is_valid_finite_number(etc) else float("inf"),
-            'variance_at_completion': round(vac, 2) if is_valid_finite_number(vac) else float("-inf"),
+            'ev': round(earned_value, 2),
+            'cv': round(cost_variance, 2),
+            'sv': round(schedule_variance, 2),
+            'cpi': round(cpi, 3) if is_valid_finite_number(cpi) and not (pd.isna(cpi) or math.isnan(cpi)) else cpi,
+            'spi': round(spi, 3) if is_valid_finite_number(spi) and not (pd.isna(spi) or math.isnan(spi)) else spi,
+            'eac': round(eac, 2) if is_valid_finite_number(eac) else float("inf"),
+            'etc': round(etc, 2) if is_valid_finite_number(etc) else float("inf"),
+            'vac': round(vac, 2) if is_valid_finite_number(vac) else float("-inf"),
         }
 
     except ValueError as e:
         logger.error(f"EVM metrics calculation failed: {e}")
         return {
-            'percent_complete': 0.0, 'earned_value': 0.0, 'cost_variance': 0.0,
-            'schedule_variance': 0.0, 'cost_performance_index': 0.0,
-            'schedule_performance_index': 0.0, 'estimate_at_completion': float("inf"),
-            'estimate_to_complete': float("inf"), 'variance_at_completion': float("-inf")
+            'percent_complete': 0.0, 'ev': 0.0, 'cv': 0.0,
+            'sv': 0.0, 'cpi': 0.0,
+            'spi': 0.0, 'eac': float("inf"),
+            'etc': float("inf"), 'vac': float("-inf")
         }
 
 
@@ -567,18 +567,18 @@ def calculate_earned_schedule_metrics(earned_schedule, actual_duration, total_du
             likely_completion_str = "Unknown"
 
         return {
-            'earned_schedule': round(earned_schedule, 2),
+            'es': round(earned_schedule, 2),
             'spie': round(spie, 3) if is_valid_finite_number(spie) else 0.0,
             'tve': round(tve, 2),
-            'likely_duration': round(likely_duration, 2) if is_valid_finite_number(likely_duration) else total_duration,
+            'ld': round(likely_duration, 2) if is_valid_finite_number(likely_duration) else total_duration,
             'likely_completion': likely_completion_str
         }
 
     except ValueError as e:
         logger.error(f"Earned schedule metrics calculation failed: {e}")
         return {
-            'earned_schedule': 0.0, 'spie': 0.0, 'tve': 0.0,
-            'likely_duration': total_duration, 'likely_completion': 'Unknown'
+            'es': 0.0, 'spie': 0.0, 'tve': 0.0,
+            'ld': total_duration, 'likely_completion': 'Unknown'
         }
 
 
@@ -611,9 +611,9 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         evm_metrics = calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev, use_manual_ev)
 
         if curve_type.lower() == 's-curve':
-            earned_schedule = find_earned_schedule_scurve(evm_metrics['earned_value'], bac, original_duration, alpha, beta)
+            earned_schedule = find_earned_schedule_scurve(evm_metrics['ev'], bac, original_duration, alpha, beta)
         else:
-            earned_schedule = find_earned_schedule_linear(evm_metrics['earned_value'], bac, original_duration)
+            earned_schedule = find_earned_schedule_linear(evm_metrics['ev'], bac, original_duration)
 
         es_metrics = calculate_earned_schedule_metrics(earned_schedule, actual_duration, original_duration, parsed_plan_start, original_duration)
 
@@ -625,7 +625,7 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
         planned_value_project = calculate_planned_value_of_project(bac, original_duration, annual_inflation_rate)
 
         # Get likely duration from es_metrics for likely value calculation
-        likely_duration = es_metrics.get('likely_duration', original_duration)
+        likely_duration = es_metrics.get('ld', original_duration)
         if likely_duration is None or not is_valid_finite_number(likely_duration):
             likely_duration = original_duration
         likely_value_project = calculate_likely_value_of_project(bac, likely_duration, annual_inflation_rate)
@@ -647,7 +647,7 @@ def perform_complete_evm_analysis(bac, ac, plan_start, plan_finish, data_date,
             'actual_duration_months': actual_duration,
             'original_duration_months': original_duration,
             'present_value': present_value,
-            'planned_value': planned_value,
+            'pv': planned_value,
             'percent_budget_used': percent_budget_used,
             'percent_time_used': percent_time_used,
             'use_manual_pv': use_manual_pv,
