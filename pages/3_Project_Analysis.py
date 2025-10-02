@@ -35,15 +35,16 @@ except ImportError:
 import streamlit as st
 from dateutil import parser as date_parser
 
+# Import utility functions from core.utils (centralized utilities)
+from core.utils import *  # noqa: F401, F403
+
 # Import EVM functions from centralized engine
 from core.evm_engine import (
     perform_complete_evm_analysis,
     perform_batch_calculation,
     calculate_evm_metrics,
-    parse_date_any,
-    safe_divide,
-    validate_numeric_input,
-    is_valid_finite_number
+    calculate_pv_linear,
+    calculate_pv_scurve,
 )
 
 # =============================================================================
@@ -186,19 +187,7 @@ def sanitize_sql_identifier(identifier: str) -> str:
     cleaned = identifier.replace('"', '').replace('[', '').replace(']', '')
     return f'"{cleaned}"'
 
-def validate_numeric_input(value: Any, field_name: str, min_val: float = None, max_val: float = None) -> float:
-    """Validate numeric input with proper error handling."""
-    try:
-        num_val = float(value)
-        if math.isnan(num_val) or math.isinf(num_val):
-            raise ValueError(f"{field_name} cannot be NaN or infinite")
-        if min_val is not None and num_val < min_val:
-            raise ValueError(f"{field_name} must be >= {min_val}")
-        if max_val is not None and num_val > max_val:
-            raise ValueError(f"{field_name} must be <= {max_val}")
-        return num_val
-    except (ValueError, TypeError) as e:
-        raise ValueError(f"Invalid {field_name}: {e}")
+# validate_numeric_input() now imported from core.utils
 
 # =============================================================================
 # LOCAL STORAGE UTILITIES
@@ -233,53 +222,9 @@ def load_model_config() -> Dict[str, str]:
 # ENHANCED UTILITIES
 # =============================================================================
 
-def safe_divide(numerator: float, denominator: float, default: float = 0.0, return_na_for_zero_ac: bool = False) -> float:
-    """Safely divide two numbers, avoiding division by zero.
+# safe_divide() now imported from core.utils
 
-    Args:
-        numerator: The numerator value
-        denominator: The denominator value
-        default: Default value to return on division errors
-        return_na_for_zero_ac: If True, returns 'N/A' for AC=0 cases in financial metrics
-    """
-    try:
-        if abs(denominator) < 1e-10:
-            if return_na_for_zero_ac and denominator == 0:
-                return float('nan')  # Will be displayed as 'N/A'
-            return default
-        result = numerator / denominator
-        if math.isinf(result) or math.isnan(result):
-            return default
-        return result
-    except (ZeroDivisionError, TypeError, ValueError):
-        return default
-
-def safe_calculate_forecast_duration(total_duration: float, spie: float, original_duration: float = None) -> float:
-    """Safely calculate forecast duration (LD) with constraint that LD <= 2.5 * OD.
-
-    Args:
-        total_duration: Total project duration
-        spie: Schedule Performance Index Estimate
-        original_duration: Original duration for constraint checking
-
-    Returns:
-        Constrained forecast duration or infinity if invalid
-    """
-    try:
-        if spie <= 1e-10:
-            return float("inf")
-
-        forecast_duration = safe_divide(total_duration, spie, float("inf"))
-
-        # Apply 2.5x OD constraint if original_duration is provided
-        if original_duration is not None and is_valid_finite_number(original_duration) and original_duration > 0:
-            max_allowed_ld = 2.5 * original_duration
-            if is_valid_finite_number(forecast_duration):
-                forecast_duration = min(forecast_duration, max_allowed_ld)
-
-        return forecast_duration
-    except (ValueError, TypeError):
-        return float("inf")
+# safe_calculate_forecast_duration() now imported from core.utils
 
 def safe_financial_metrics(ev: float, ac: float, pv: float = None) -> dict:
     """Safely calculate CPI, SPI, and related metrics, handling AC=0 cases.
@@ -328,57 +273,9 @@ def format_financial_metric(value: float, decimals: int = 3, as_percentage: bool
     except (ValueError, TypeError):
         return "N/A"
 
-def is_valid_finite_number(value: Any) -> bool:
-    """Check if value is a valid finite number."""
-    try:
-        num_val = float(value)
-        return math.isfinite(num_val)
-    except (ValueError, TypeError):
-        return False
+# is_valid_finite_number() now imported from core.utils
 
-def parse_date_any(x):
-    """Robust date parser with improved error handling."""
-    if isinstance(x, datetime):
-        return x
-    if isinstance(x, date):
-        return datetime(x.year, x.month, x.day)
-
-    if isinstance(x, (int, float)) and not isinstance(x, bool):
-        try:
-            if x < 1 or x > 2958465:
-                raise ValueError(f"Excel ordinal {x} out of valid range")
-            return datetime.fromordinal(EXCEL_ORDINAL_BASE.toordinal() + int(x))
-        except (ValueError, OverflowError) as e:
-            logger.warning(f"Failed to parse Excel ordinal {x}: {e}")
-            raise ValueError(f"Invalid Excel date ordinal: {x}")
-
-    if not isinstance(x, str):
-        raise ValueError(f"Unrecognized date format: {x!r}")
-
-    s = x.strip()
-    if not s:
-        raise ValueError("Empty date string")
-
-    s = s.replace("–", "-").replace("—", "-").replace(",", " ")
-    s = re.sub(r"\s+", " ", s)
-
-    date_formats = [
-        "%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y",
-        "%d-%m-%y", "%d/%m/%y", "%m/%d/%y", "%d-%b-%Y", "%d %b %Y",
-        "%b %d %Y", "%d-%b-%y", "%d %b %y", "%b %d %y",
-        "%d-%B-%Y", "%d %B %Y", "%B %d %Y", "%d-%B-%y", "%d %B %y", "%B %d %y",
-    ]
-    
-    for fmt in date_formats:
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
-
-    try:
-        return date_parser.parse(s, dayfirst=True, yearfirst=False)
-    except Exception as e:
-        raise ValueError(f"Unable to parse date '{x}': {e}")
+# parse_date_any() now imported from core.utils
 
 def format_currency(amount: float, symbol: str, postfix: str = "", decimals: int = 2) -> str:
     """Enhanced currency formatting with comma separators and postfix options.
@@ -1131,57 +1028,9 @@ def create_demo_data():
 # EVM CALCULATION ENGINE (UNCHANGED)
 # =============================================================================
 
-def scurve_cdf(x: float, alpha: float = 2.0, beta: float = 2.0) -> float:
-    """S-curve CDF with improved error handling and validation."""
-    try:
-        x = max(0.0, min(1.0, float(x)))
-        alpha = max(0.1, float(alpha))
-        beta = max(0.1, float(beta))
-        
-        # Closed-form for Beta(2,2)
-        if abs(alpha - 2.0) < 1e-9 and abs(beta - 2.0) < 1e-9:
-            return 3 * x * x - 2 * x * x * x
-        
-        # Improved numeric integration for other parameters
-        if x == 0.0:
-            return 0.0
-        if x == 1.0:
-            return 1.0
-            
-        n = max(INTEGRATION_STEPS, 100)
-        xs = np.linspace(0, x, n + 1)
-        pdf_vals = (xs**(alpha-1)) * ((1 - xs)**(beta-1))
-        
-        # Use gamma function with error handling
-        try:
-            B = math.gamma(alpha) * math.gamma(beta) / math.gamma(alpha + beta)
-        except (ValueError, OverflowError):
-            logger.warning(f"Gamma function overflow for alpha={alpha}, beta={beta}")
-            return 3 * x * x - 2 * x * x * x  # Fallback to Beta(2,2)
-            
-        result = float(np.trapz(pdf_vals, xs) / B)
-        return max(0.0, min(1.0, result))
-        
-    except Exception as e:
-        logger.error(f"S-curve CDF calculation failed: {e}")
-        return 3 * x * x - 2 * x * x * x  # Safe fallback
+# scurve_cdf() now imported from core.utils
 
-def calculate_durations(plan_start, plan_finish, data_date) -> tuple[float, float]:
-    """Calculate durations with improved error handling."""
-    try:
-        # Handle both raw dates and already-parsed datetime objects
-        ps = plan_start if isinstance(plan_start, datetime) else parse_date_any(plan_start)
-        pf = plan_finish if isinstance(plan_finish, datetime) else parse_date_any(plan_finish)
-        dd = data_date if isinstance(data_date, datetime) else parse_date_any(data_date)
-        
-        duration_to_date = max(((dd - ps).days / DAYS_PER_MONTH), 0.0)
-        original_duration = max(((pf - ps).days / DAYS_PER_MONTH), 0.0)
-        
-        return round(duration_to_date, 2), round(original_duration, 2)
-        
-    except Exception as e:
-        logger.error(f"Duration calculation failed: {e}")
-        return 0.0, 0.0
+# calculate_durations() now imported from core.utils
 
 def calculate_present_value(ac, duration_months, annual_inflation_rate) -> float:
     """Calculate present value with improved validation."""
@@ -1285,43 +1134,9 @@ def calculate_likely_value_of_project(bac, ld, annual_inflation_rate) -> float:
         logger.error(f"Likely Value of Project calculation failed: {e}")
         return 0.0
 
-def calculate_pv_linear(bac, current_duration, total_duration) -> float:
-    """Calculate planned value (linear) with validation."""
-    try:
-        bac = validate_numeric_input(bac, "BAC", min_val=0.0)
-        current_duration = validate_numeric_input(current_duration, "Current Duration", min_val=0.0)
-        total_duration = validate_numeric_input(total_duration, "Total Duration", min_val=0.0)
-        
-        if total_duration <= 0:
-            return round(bac, 2) if current_duration > 0 else 0.0
-        if current_duration >= total_duration:
-            return round(bac, 2)
-            
-        progress_ratio = max(min(current_duration / total_duration, 1.0), 0.0)
-        return round(bac * progress_ratio, 2)
-        
-    except ValueError as e:
-        logger.error(f"Linear PV calculation failed: {e}")
-        return 0.0
+# calculate_pv_linear() now imported from core.utils
 
-def calculate_pv_scurve(bac, current_duration, total_duration, alpha=2.0, beta=2.0) -> float:
-    """Calculate planned value (S-curve) with validation."""
-    try:
-        bac = validate_numeric_input(bac, "BAC", min_val=0.0)
-        current_duration = validate_numeric_input(current_duration, "Current Duration", min_val=0.0)
-        total_duration = validate_numeric_input(total_duration, "Total Duration", min_val=0.0)
-        
-        if total_duration <= 0:
-            return round(bac, 2) if current_duration > 0 else 0.0
-        if current_duration >= total_duration:
-            return round(bac, 2)
-            
-        progress_ratio = max(min(current_duration / total_duration, 1.0), 0.0)
-        return round(bac * scurve_cdf(progress_ratio, alpha, beta), 2)
-        
-    except ValueError as e:
-        logger.error(f"S-curve PV calculation failed: {e}")
-        return 0.0
+# calculate_pv_scurve() now imported from core.utils
 
 def calculate_evm_metrics(bac, ac, present_value, planned_value, manual_ev=None, use_manual_ev=False) -> Dict[str, float]:
     """Calculate EVM metrics with improved error handling."""
@@ -3626,14 +3441,24 @@ def main():
                 Focus on being actionable, specific, and quantified. Avoid generic project management advice.
                 Use professional tone appropriate for executive leadership.
                 """)
-                
+
                 if st.button("🚀 Generate Executive Brief", type="primary"):
-                    with st.spinner("Generating executive brief..."):
-                        brief_response = safe_llm_request(
-                            llm_config['provider'], llm_config['model'], llm_config['api_key'],
-                            llm_config['temperature'], llm_config['timeout'], prompt
-                        )
-                        st.session_state.executive_brief = brief_response
+                    # Get LLM config from session state (set in File Management)
+                    llm_config = st.session_state.config_dict.get('llm_config', {})
+
+                    if not llm_config:
+                        st.warning("⚠️ LLM Provider not configured. Please configure it in File Management.")
+                    else:
+                        with st.spinner("Generating executive brief..."):
+                            brief_response = safe_llm_request(
+                                llm_config.get('provider', ''),
+                                llm_config.get('model', ''),
+                                llm_config.get('api_key', ''),
+                                llm_config.get('temperature', 0.2),
+                                llm_config.get('timeout', 60),
+                                prompt
+                            )
+                            st.session_state.executive_brief = brief_response
                 
                 if "executive_brief" in st.session_state:
                     brief = st.session_state.executive_brief

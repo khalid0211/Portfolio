@@ -545,7 +545,32 @@ def main():
     # Map columns to expected format and calculate metrics
     df = map_columns_to_standard(df)
     metrics = calculate_portfolio_metrics(df)
-    
+
+    # Create budget tier categories early for use in charts
+    tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+    default_tier_config = {
+        'cutoff_points': [4000, 8000, 15000],
+        'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
+        'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
+    }
+    cutoffs = tier_config.get('cutoff_points', default_tier_config['cutoff_points'])
+    tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
+
+    def categorize_budget_by_tier(budget):
+        """Assign tier based on configurable budget ranges"""
+        if pd.isna(budget):
+            return "Unknown"
+        elif budget >= cutoffs[2]:  # Tier 4 (highest)
+            return tier_names[3]
+        elif budget >= cutoffs[1]:  # Tier 3
+            return tier_names[2]
+        elif budget >= cutoffs[0]:  # Tier 2
+            return tier_names[1]
+        else:  # Tier 1 (lowest)
+            return tier_names[0]
+
+    df['Budget_Category'] = df['Budget'].apply(categorize_budget_by_tier)
+
     # Use portfolio-level calculations for CPI/SPI, keep weighted average for SPIe
     portfolio_cpi_weighted = metrics['portfolio_cpi']  # Already calculated as SUM(EV)/SUM(AC)
     portfolio_spi_weighted = metrics['portfolio_spi']  # Already calculated as SUM(EV)/SUM(PV)
@@ -745,11 +770,6 @@ def main():
         fig_health.update_traces(textposition='inside', textinfo='percent+label')
         fig_health.update_layout(height=400)
         st.plotly_chart(fig_health, width='stretch')
-        
-        # Health metrics with enhanced styling
-        st.markdown(f'<div class="status-success">✅ Healthy Projects: {metrics["healthy_projects"]} ({metrics["healthy_projects"]/metrics["total_projects"]*100:.0f}%)</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="status-warning">⚠️ At Risk Projects: {metrics["at_risk_projects"]} ({metrics["at_risk_projects"]/metrics["total_projects"]*100:.0f}%)</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="status-critical">🚨 Critical Projects: {metrics["critical_projects"]} ({metrics["critical_projects"]/metrics["total_projects"]*100:.0f}%)</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="section-header">💰 Financial Performance Intelligence</div>', unsafe_allow_html=True)
@@ -783,13 +803,63 @@ def main():
             )
         )
         st.plotly_chart(fig_financial, width='stretch')
-        
-        # Financial alert
-        if metrics['forecast_overrun'] > 0:
-            st.error(f"📢 Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (+{format_currency(metrics['forecast_overrun'], currency_symbol, currency_postfix, thousands=False)} over budget)")
-        else:
-            st.success(f"✅ Portfolio EAC: {format_currency(metrics['total_eac'], currency_symbol, currency_postfix, thousands=False)} (Under budget)")
 
+    # Portfolio by Tier Analysis
+    st.markdown('<div class="section-header">🎯 Portfolio Distribution</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        # Portfolio Budget by Tier
+        if 'Budget_Category' in df.columns and 'Budget' in df.columns:
+            tier_budget = df.groupby('Budget_Category')['Budget'].sum().sort_values(ascending=False)
+
+            # Get tier colors from config
+            tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+            tier_colors = tier_config.get('colors', ['#3498db', '#27ae60', '#f39c12', '#e74c3c'])
+            tier_names = tier_config.get('tier_names', ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'])
+
+            # Create color map based on tier names
+            color_map = {tier_names[i]: tier_colors[i] for i in range(len(tier_names))}
+
+            fig_budget_tier = px.pie(
+                values=tier_budget.values,
+                names=tier_budget.index,
+                title="Portfolio Value by Budget Category",
+                color=tier_budget.index,
+                color_discrete_map=color_map
+            )
+            fig_budget_tier.update_traces(textposition='inside', textinfo='percent+label')
+            fig_budget_tier.update_layout(height=400)
+            st.plotly_chart(fig_budget_tier, use_container_width=True)
+        else:
+            st.info("Budget tier data not available")
+
+    with col2:
+        # Portfolio Projects by Tier
+        if 'Budget_Category' in df.columns:
+            tier_count = df['Budget_Category'].value_counts().sort_index()
+
+            # Get tier colors from config
+            tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
+            tier_colors = tier_config.get('colors', ['#3498db', '#27ae60', '#f39c12', '#e74c3c'])
+            tier_names = tier_config.get('tier_names', ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'])
+
+            # Create color map based on tier names
+            color_map = {tier_names[i]: tier_colors[i] for i in range(len(tier_names))}
+
+            fig_project_tier = px.pie(
+                values=tier_count.values,
+                names=tier_count.index,
+                title="Portfolio Projects by Budget Category",
+                color=tier_count.index,
+                color_discrete_map=color_map
+            )
+            fig_project_tier.update_traces(textposition='inside', textinfo='percent+label')
+            fig_project_tier.update_layout(height=400)
+            st.plotly_chart(fig_project_tier, use_container_width=True)
+        else:
+            st.info("Project tier data not available")
 
     # Project Spotlight Section
     with st.expander("🎯 Project Spotlight", expanded=False):
@@ -1193,32 +1263,7 @@ def main():
     
     # Interactive Data Explorer
     with st.expander("Advanced Portfolio Analytics", expanded=False):
-        
-        # Create budget categories using configurable tier system
-        # Get tier configuration from session state
-        tier_config = st.session_state.config_dict.get('controls', {}).get('tier_config', {})
-        default_tier_config = {
-            'cutoff_points': [4000, 8000, 15000],
-            'tier_names': ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'],
-            'colors': ['#3498db', '#27ae60', '#f39c12', '#e74c3c']
-        }
-        cutoffs = tier_config.get('cutoff_points', default_tier_config['cutoff_points'])
-        tier_names = tier_config.get('tier_names', default_tier_config['tier_names'])
-
-        def categorize_budget_by_tier(budget):
-            """Assign tier based on configurable budget ranges"""
-            if pd.isna(budget):
-                return "Unknown"
-            elif budget >= cutoffs[2]:  # Tier 4 (highest)
-                return tier_names[3]
-            elif budget >= cutoffs[1]:  # Tier 3
-                return tier_names[2]
-            elif budget >= cutoffs[0]:  # Tier 2
-                return tier_names[1]
-            else:  # Tier 1 (lowest)
-                return tier_names[0]
-
-        df['Budget_Category'] = df['Budget'].apply(categorize_budget_by_tier)
+        # Budget_Category already created earlier in the code
 
         # ═══════════════════════════════════════════════════════════════════
         # 🎯 FILTER CONTROLS SECTION
@@ -1815,6 +1860,28 @@ def main():
                         st.markdown(f'<div class="financial-metric">🎯 **Portfolio Estimate at Completion (EAC)**<br><span class="financial-value">{eac_formatted}</span></div>', unsafe_allow_html=True)
                     else:
                         st.markdown(f'<div class="financial-metric">🎯 **Portfolio Estimate at Completion (EAC)**<br><span class="financial-value">Not Available</span></div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Portfolio EAC Status Alert
+                forecast_overrun = total_eac - total_budget
+                if forecast_overrun > 0:
+                    eac_fmt = format_currency(total_eac, currency_symbol, currency_postfix, thousands=False)
+                    overrun_fmt = format_currency(forecast_overrun, currency_symbol, currency_postfix, thousands=False)
+                    st.markdown(
+                        f"""<div style="background-color: #fee; border-left: 4px solid #c33; padding: 1rem; border-radius: 4px; margin: 1rem 0; font-family: sans-serif; letter-spacing: normal; word-spacing: normal;">
+                        📢 <strong>Portfolio EAC Status:</strong> {eac_fmt} (+{overrun_fmt} over budget)
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    eac_fmt = format_currency(total_eac, currency_symbol, currency_postfix, thousands=False)
+                    st.markdown(
+                        f"""<div style="background-color: #efe; border-left: 4px solid #3c3; padding: 1rem; border-radius: 4px; margin: 1rem 0; font-family: sans-serif; letter-spacing: normal; word-spacing: normal;">
+                        ✅ <strong>Portfolio EAC Status:</strong> {eac_fmt} (Under budget)
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
 
             else:
                 st.info("No data available for financial summary.")

@@ -776,6 +776,24 @@ def render_llm_provider_section():
         key="llm_provider"
     )
 
+    # Model selection based on provider
+    if provider == "OpenAI":
+        openai_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+        selected_model = st.selectbox(
+            "OpenAI Model",
+            openai_models,
+            index=1,  # Default to gpt-4o-mini
+            key="openai_model"
+        )
+    else:  # Gemini
+        gemini_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+        selected_model = st.selectbox(
+            "Gemini Model",
+            gemini_models,
+            index=1,  # Default to gemini-1.5-flash
+            key="gemini_model"
+        )
+
     # API Key file upload
     uploaded_file = st.file_uploader(
         "Upload API Key File",
@@ -784,6 +802,7 @@ def render_llm_provider_section():
         key="api_key_uploader"
     )
 
+    api_key = ""
     if uploaded_file is not None:
         try:
             api_key = uploaded_file.read().decode('utf-8').strip()
@@ -791,10 +810,33 @@ def render_llm_provider_section():
             st.success("✅ API key loaded successfully")
         except Exception as e:
             st.error(f"❌ Error reading API key: {str(e)}")
+    elif 'api_key' in st.session_state:
+        # Use previously uploaded key
+        api_key = st.session_state['api_key']
+        st.info("ℹ️ Using previously uploaded API key")
+
+    # LLM settings
+    temperature = st.slider(
+        "Temperature",
+        min_value=0.0, max_value=1.0, value=0.2, step=0.01,
+        key="llm_temperature",
+        help="Lower values = more focused/deterministic, higher values = more creative"
+    )
+
+    timeout = st.slider(
+        "Timeout (seconds)",
+        min_value=30, max_value=300, value=60, step=5,
+        key="llm_timeout",
+        help="Maximum time to wait for LLM response"
+    )
 
     llm_config = {
         'provider': provider,
-        'has_api_key': 'api_key' in st.session_state
+        'model': selected_model,
+        'api_key': api_key,
+        'temperature': temperature,
+        'timeout': timeout,
+        'has_api_key': bool(api_key)
     }
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -898,13 +940,17 @@ df, selected_table, column_mapping = render_data_source_section()
 controls = render_controls_section()
 render_batch_calculation_section()
 llm_config = render_llm_provider_section()
+
+# Save LLM config to session state
+st.session_state.config_dict['llm_config'] = llm_config
+
 render_save_download_section()
 
 # Status summary
 st.markdown("---")
 st.markdown("## 📋 Configuration Summary")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     if st.session_state.data_df is not None and not st.session_state.data_df.empty:
@@ -923,6 +969,15 @@ with col2:
         st.info("💡 Controls: Using defaults")
 
 with col3:
+    if st.session_state.config_dict.get('llm_config', {}).get('has_api_key'):
+        llm = st.session_state.config_dict['llm_config']
+        st.success("✅ LLM: Configured")
+        st.caption(f"{llm.get('provider', 'N/A')} - {llm.get('model', 'N/A')}")
+    else:
+        st.info("💡 LLM: Not configured")
+        st.caption("Upload API key to enable")
+
+with col4:
     if st.session_state.get('batch_results_ready'):
         st.success("✅ Batch calculations: Complete")
         st.caption("Ready for analysis")
