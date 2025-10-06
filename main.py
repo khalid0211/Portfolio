@@ -159,7 +159,7 @@ with col2:
     - Hover insights for project detail
     """)
     if st.button("📊 Open Portfolio Gantt", key="gantt_btn", width='stretch'):
-        st.switch_page("pages/5_Portfolio_Gantt.py")
+        st.switch_page("pages/5_Portfolio_Charts.py")
 
 
 # Quick stats if data exists
