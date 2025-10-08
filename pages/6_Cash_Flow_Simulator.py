@@ -510,7 +510,7 @@ fig.update_layout(
     margin=dict(l=40, r=40, t=60, b=40)
 )
 
-st.plotly_chart(fig, width='stretch')
+st.plotly_chart(fig, use_container_width=True)
 
 # Compact Results Section
 baseline_budget = sum(baseline_monthly_cashflows)

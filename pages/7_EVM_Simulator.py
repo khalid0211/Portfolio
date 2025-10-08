@@ -556,7 +556,7 @@ if pv >= 0 and ev >= 0 and ac >= 0 and bac > 0:
             )
         )
 
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
     # Compact Project Status Summary
     st.markdown('<div class="subsection-title">Project Status Summary</div>', unsafe_allow_html=True)

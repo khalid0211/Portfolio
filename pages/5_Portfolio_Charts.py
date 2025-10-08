@@ -1041,7 +1041,7 @@ def render_cash_flow_chart(filtered_df: pd.DataFrame, start_col: str = None, fin
                                         textposition='outside'
                                     )
 
-                                st.plotly_chart(fig_cash_flow, width='stretch')
+                                st.plotly_chart(fig_cash_flow, use_container_width=True)
 
                                 # Display summary metrics
                                 col1, col2 = st.columns(2)
@@ -1509,7 +1509,7 @@ def render_portfolio_performance_curve(filtered_df: pd.DataFrame) -> None:
                 )
             )
 
-            st.plotly_chart(fig_performance, width='stretch')
+            st.plotly_chart(fig_performance, use_container_width=True)
 
             # Filter summary for performance curve
             health_col = 'health_category' if 'health_category' in df_scatter.columns else 'Health_Category'
@@ -1806,7 +1806,7 @@ def render_portfolio_budget_chart(filtered_df: pd.DataFrame) -> None:
                         marker_line_width=0
                     )
 
-                    st.plotly_chart(fig_portfolio, width='stretch')
+                    st.plotly_chart(fig_portfolio, use_container_width=True)
 
                     # Add summary statistics below the chart
                     col1, col2, col3 = st.columns(3)
@@ -1921,7 +1921,7 @@ def render_portfolio_budget_chart(filtered_df: pd.DataFrame) -> None:
                         textfont_size=10
                     )
 
-                    st.plotly_chart(fig_portfolio, width='stretch')
+                    st.plotly_chart(fig_portfolio, use_container_width=True)
 
                     # Add tier summary statistics
                     col1, col2, col3, col4 = st.columns(4)
@@ -2223,7 +2223,7 @@ def render_approvals_chart(filtered_df: pd.DataFrame) -> None:
                             cliponaxis=False
                         )
 
-                        st.plotly_chart(fig_approvals, width='stretch')
+                        st.plotly_chart(fig_approvals, use_container_width=True)
 
                         # Add tier legend when tiers are enabled
                         if show_tiers:
@@ -2513,7 +2513,7 @@ def render_gantt(df: pd.DataFrame, show_predicted: bool, period_choice: str, sta
         title_font=dict(color="#000000")
     )
 
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def render_footer():
