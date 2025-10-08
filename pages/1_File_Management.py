@@ -487,9 +487,10 @@ def render_controls_section():
         data_date = st.date_input(
             "Data Date",
             value=pd.to_datetime(saved_controls.get('data_date', '2024-01-01')).date(),
-            min_value=datetime(1990, 1, 1).date(),
+            min_value=datetime(2001, 1, 1).date(),
+            max_value=datetime(2035, 12, 30).date(),
             key="data_date_input",
-            help="Project data date for EVM calculations (minimum: 1990-01-01)"
+            help="Project data date for EVM calculations (valid range: 2001-01-01 to 2035-12-30)"
         )
 
     # Inflation rate
