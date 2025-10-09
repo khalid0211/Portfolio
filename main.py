@@ -161,6 +161,25 @@ with col2:
     if st.button("📊 Open Portfolio Gantt", key="gantt_btn", width='stretch'):
         st.switch_page("pages/5_Portfolio_Charts.py")
 
+st.markdown("---")
+
+# ═══════════════════════════════════════════════════════════════════
+# 🎯 PROJECT EVALUATION
+# ═══════════════════════════════════════════════════════════════════
+st.markdown("### 🎯 Project Evaluation")
+col1 = st.columns(1)[0]
+
+with col1:
+    st.markdown("""
+    #### 📊 Punjab ADP Project Scorer
+    - Systematic 9-factor scoring framework
+    - Strategic alignment assessment
+    - Implementation readiness evaluation
+    - Automated project classification & recommendations
+    """)
+    if st.button("📊 Open ADP Project Scorer", key="project_scorer_btn", width='stretch'):
+        st.switch_page("pages/8_Project_Scorer.py")
+
 
 # Quick stats if data exists
 if hasattr(st.session_state, 'batch_results') and st.session_state.batch_results is not None:

@@ -75,10 +75,6 @@ st.markdown("""
 # Initialize session state
 if 'projects' not in st.session_state:
     st.session_state.projects = []
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = None
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
 
 # Scoring criteria data
 FACTORS = {
@@ -220,7 +216,7 @@ def calculate_weighted_score(scores):
     """Calculate weighted total score"""
     total_score = 0
     total_weight = 0
-    
+
     for category, data in FACTORS.items():
         for factor in data["factors"]:
             factor_id = factor["id"]
@@ -228,7 +224,7 @@ def calculate_weighted_score(scores):
                 weight = factor["weight"] / 100
                 total_score += scores[factor_id] * weight
                 total_weight += weight
-    
+
     return total_score if total_weight > 0 else 0
 
 def get_classification(weighted_score):
@@ -247,63 +243,32 @@ def get_classification(weighted_score):
 def check_minimum_scores(scores):
     """Check if minimum score requirements are met"""
     violations = []
-    
+
     for category, data in FACTORS.items():
         for factor in data["factors"]:
             factor_id = factor["id"]
             min_score = factor["min_score"]
-            
+
             if min_score is not None:
                 if factor_id not in scores or scores[factor_id] is None:
                     violations.append(f"{factor['name']}: Score not provided (minimum required: {min_score})")
                 elif scores[factor_id] < min_score:
                     violations.append(f"{factor['name']}: Score {scores[factor_id]} is below minimum required ({min_score})")
-    
-    return violations
 
-def login_page():
-    """Login page"""
-    st.markdown('<p class="main-header">Punjab ADP Project Scorer</p>', unsafe_allow_html=True)
-    st.markdown("### Login")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        username = st.text_input("Username")
-        role = st.selectbox("Role", ["Project Sponsor", "PDB Reviewer", "Administrator"])
-        
-        if st.button("Login", type="primary"):
-            if username:
-                st.session_state.current_user = username
-                st.session_state.user_role = role
-                st.rerun()
-            else:
-                st.error("Please enter a username")
+    return violations
 
 def dashboard_page():
     """Dashboard page"""
     st.markdown('<p class="main-header">Dashboard</p>', unsafe_allow_html=True)
-    
-    # User info
-    col1, col2, col3 = st.columns([2, 2, 1])
-    with col1:
-        st.write(f"**User:** {st.session_state.current_user}")
-    with col2:
-        st.write(f"**Role:** {st.session_state.user_role}")
-    with col3:
-        if st.button("Logout"):
-            st.session_state.current_user = None
-            st.session_state.user_role = None
-            st.rerun()
-    
+
     st.markdown("---")
-    
+
     # Metrics
     total_projects = len(st.session_state.projects)
     submitted = len([p for p in st.session_state.projects if p.get('status') == 'Submitted'])
     under_review = len([p for p in st.session_state.projects if p.get('status') == 'Under Review'])
     approved = len([p for p in st.session_state.projects if p.get('status') == 'Approved'])
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Projects", total_projects)
@@ -313,12 +278,12 @@ def dashboard_page():
         st.metric("Under Review", under_review)
     with col4:
         st.metric("Approved", approved)
-    
+
     st.markdown("---")
-    
+
     # Projects list
     st.markdown("### My Projects")
-    
+
     if st.session_state.projects:
         df = pd.DataFrame([
             {
@@ -331,57 +296,57 @@ def dashboard_page():
             }
             for p in st.session_state.projects
         ])
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
     else:
         st.info("No projects found. Create your first project using the 'New Project' page.")
 
 def new_project_page():
     """New project submission page"""
     st.markdown('<p class="main-header">New Project Submission</p>', unsafe_allow_html=True)
-    
+
     # Project Information
     st.markdown('<p class="section-header">Project Information</p>', unsafe_allow_html=True)
-    
+
     col1, col2 = st.columns(2)
     with col1:
         gs_code = st.text_input("Project GS Code*", help="Enter the unique GS code for this project")
         title = st.text_input("Project Title*", help="Enter the full project title")
     with col2:
-        department = st.text_input("Department/Organization*", value=st.session_state.current_user)
+        department = st.text_input("Department/Organization*")
         submission_date = st.date_input("Submission Date", value=datetime.now())
-    
+
     description = st.text_area("Brief Description*", help="Provide a concise description of the project objectives and outcomes", height=100)
-    
+
     st.markdown("---")
-    
+
     # Scoring Interface
     st.markdown('<p class="section-header">Project Scoring</p>', unsafe_allow_html=True)
     st.info("📋 **Instructions:** Score each factor from 0-4 based on the criteria provided. Factors marked with ⚠️ have minimum score requirements.")
-    
+
     scores = {}
     justifications = {}
     attachments = {}
-    
+
     for category, data in FACTORS.items():
         st.markdown(f"### {category} ({data['weight']}%)")
-        
+
         for factor in data["factors"]:
             factor_id = factor["id"]
             factor_name = factor["name"]
             weight = factor["weight"]
             min_score = factor["min_score"]
-            
+
             # Factor header
             min_indicator = " ⚠️ **Min: 2**" if min_score else ""
             st.markdown(f"**Factor {factor_id}: {factor_name} ({weight}%)**{min_indicator}")
-            
+
             # Scoring criteria in expander
             with st.expander("View Scoring Criteria"):
                 for score_val, criteria_text in factor["criteria"].items():
                     st.write(f"**{score_val}:** {criteria_text}")
-            
+
             col1, col2 = st.columns([1, 2])
-            
+
             with col1:
                 score = st.select_slider(
                     f"Score for Factor {factor_id}",
@@ -390,10 +355,10 @@ def new_project_page():
                     label_visibility="collapsed"
                 )
                 scores[factor_id] = score
-                
+
                 # Show selected criteria
                 st.caption(f"**Selected:** {factor['criteria'][score]}")
-            
+
             with col2:
                 justification = st.text_area(
                     f"Justification for Factor {factor_id}*",
@@ -404,7 +369,7 @@ def new_project_page():
                     placeholder="Enter your justification here..."
                 )
                 justifications[factor_id] = justification
-            
+
             # File upload
             uploaded_files = st.file_uploader(
                 f"Upload supporting documents for Factor {factor_id}",
@@ -413,16 +378,16 @@ def new_project_page():
                 help="Attach relevant documents (PDF, DOC, DOCX, XLS, XLSX, images)"
             )
             attachments[factor_id] = uploaded_files if uploaded_files else []
-            
+
             st.markdown("---")
-    
+
     # Score Calculation and Summary
     st.markdown('<p class="section-header">Score Summary</p>', unsafe_allow_html=True)
-    
+
     weighted_score = calculate_weighted_score(scores)
     classification, css_class = get_classification(weighted_score)
     violations = check_minimum_scores(scores)
-    
+
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Weighted Total Score", f"{weighted_score:.2f}/4.00")
@@ -430,7 +395,7 @@ def new_project_page():
         st.metric("Percentage", f"{(weighted_score/4)*100:.1f}%")
     with col3:
         st.metric("Classification", classification)
-    
+
     # Show score by category
     st.markdown("#### Score Breakdown by Category")
     category_scores = []
@@ -441,36 +406,36 @@ def new_project_page():
             if factor["id"] in scores and scores[factor["id"]] is not None:
                 cat_score += scores[factor["id"]] * (factor["weight"]/100)
                 cat_weight += factor["weight"]/100
-        
+
         category_scores.append({
             "Category": category,
             "Weight": f"{data['weight']}%",
             "Score": f"{cat_score:.2f}",
             "Contribution": f"{cat_score:.2f}"
         })
-    
-    st.dataframe(pd.DataFrame(category_scores), use_container_width=True)
-    
+
+    st.dataframe(pd.DataFrame(category_scores), width='stretch')
+
     # Validation warnings
     if violations or weighted_score < 2.2:
         st.markdown('<div class="warning-box">', unsafe_allow_html=True)
         st.warning("⚠️ **Submission Requirements Not Met**")
-        
+
         if violations:
             st.markdown("**Minimum Score Violations:**")
             for violation in violations:
                 st.write(f"- {violation}")
-        
+
         if weighted_score < 2.2:
             st.write(f"- Overall weighted score ({weighted_score:.2f}) is below minimum required (2.2)")
-        
+
         st.markdown("Please address these issues before submission.")
         st.markdown('</div>', unsafe_allow_html=True)
-    
+
     # Classification description
     st.markdown(f'<div class="score-box {css_class}">', unsafe_allow_html=True)
     st.markdown(f"### Classification: {classification}")
-    
+
     if classification == "Highly Recommended":
         st.write("✅ This project demonstrates exceptional strategic alignment, strong implementation readiness, and clear community benefits. It should be prioritized for ADP inclusion.")
     elif classification == "Recommended":
@@ -481,15 +446,15 @@ def new_project_page():
         st.write("❌ This project exhibits fundamental weaknesses requiring major revision.")
     else:
         st.write("❌ This project demonstrates critical deficiencies and requires fundamental reconceptualization.")
-    
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
+
     # Submit button
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 1, 1])
-    
+
     with col1:
-        if st.button("💾 Save as Draft", use_container_width=True):
+        if st.button("💾 Save as Draft", width='stretch'):
             if gs_code and title and description:
                 project = {
                     'gs_code': gs_code,
@@ -502,17 +467,16 @@ def new_project_page():
                     'justifications': justifications,
                     'weighted_score': weighted_score,
                     'classification': classification,
-                    'created_by': st.session_state.current_user,
                     'created_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 st.session_state.projects.append(project)
                 st.success("✅ Project saved as draft!")
             else:
                 st.error("Please fill in all required fields marked with *")
-    
+
     with col2:
         submit_disabled = bool(violations) or weighted_score < 2.2
-        if st.button("📤 Submit for Review", use_container_width=True, disabled=submit_disabled, type="primary"):
+        if st.button("📤 Submit for Review", width='stretch', disabled=submit_disabled, type="primary"):
             if gs_code and title and description:
                 project = {
                     'gs_code': gs_code,
@@ -525,7 +489,6 @@ def new_project_page():
                     'justifications': justifications,
                     'weighted_score': weighted_score,
                     'classification': classification,
-                    'created_by': st.session_state.current_user,
                     'created_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 st.session_state.projects.append(project)
@@ -533,19 +496,14 @@ def new_project_page():
                 st.balloons()
             else:
                 st.error("Please fill in all required fields marked with *")
-    
+
     with col3:
-        if st.button("🔄 Reset Form", use_container_width=True):
+        if st.button("🔄 Reset Form", width='stretch'):
             st.rerun()
 
 def main():
     """Main application"""
-    
-    # Check if user is logged in
-    if st.session_state.current_user is None:
-        login_page()
-        return
-    
+
     # Sidebar navigation
     st.sidebar.markdown("## Navigation")
     page = st.sidebar.radio(
@@ -553,7 +511,7 @@ def main():
         ["Dashboard", "New Project", "View Projects", "Reports"],
         label_visibility="collapsed"
     )
-    
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("### About")
     st.sidebar.info(
@@ -561,7 +519,7 @@ def main():
         "for inclusion in the Annual Development Plan using a systematic "
         "9-factor scoring framework."
     )
-    
+
     # Route to pages
     if page == "Dashboard":
         dashboard_page()
