@@ -60,7 +60,7 @@ st.markdown("""
     <h3>Project Portfolio Analysis & Executive Dashboard</h3>
     <p style="margin-top: 1rem; font-size: 1.1em; color: #666; font-style: italic;">
         Smarter Projects and Portfolios with Earned Value Analysis and AI-Powered Executive Reporting<br>
-        <strong>Beta Version 0.9 • Released September 30, 2025</strong><br>
+        <strong>Beta Version 0.9 • Released October 13, 2025</strong><br>
         Developed by Dr. Khalid Ahmad Khan – <a href="https://www.linkedin.com/in/khalidahmadkhan/" target="_blank" style="color: #0066cc; text-decoration: none;">LinkedIn</a>
     </p>
 </div>
@@ -97,7 +97,7 @@ if any(section1_pages):
             - Batch calculations
             - Export & download options
             """)
-            if st.button("📁 Open File Management", key="file_mgmt_btn", use_container_width=True):
+            if st.button("📁 Open File Management", key="file_mgmt_btn", width="stretch"):
                 st.switch_page("pages/1_File_Management.py")
 
     with col2:
@@ -109,7 +109,7 @@ if any(section1_pages):
             - Alternative to file upload
             - Instant data validation
             """)
-            if st.button("✏️ Open Manual Data Entry", key="manual_btn", use_container_width=True):
+            if st.button("✏️ Open Manual Data Entry", key="manual_btn", width="stretch"):
                 st.switch_page("pages/2_Manual_Data_Entry.py")
 
     with col3:
@@ -121,7 +121,7 @@ if any(section1_pages):
             - Detailed calculations
             - Project-level charts
             """)
-            if st.button("🚀 Open Project Analysis", key="project_btn", use_container_width=True):
+            if st.button("🚀 Open Project Analysis", key="project_btn", width="stretch"):
                 st.switch_page("pages/3_Project_Analysis.py")
 
     st.markdown("---")
@@ -142,7 +142,7 @@ if any(section2_pages):
             - Strategic performance indicators
             - Executive summary reports
             """)
-            if st.button("📊 Open Portfolio Analysis", key="portfolio_btn", use_container_width=True):
+            if st.button("📊 Open Portfolio Analysis", key="portfolio_btn", width="stretch"):
                 st.switch_page("pages/4_Portfolio_Analysis.py")
 
     with col2:
@@ -154,7 +154,7 @@ if any(section2_pages):
             - EV progress shading with forecast alerts
             - Hover insights for project detail
             """)
-            if st.button("📊 Open Portfolio Charts", key="gantt_btn", use_container_width=True):
+            if st.button("📊 Open Portfolio Charts", key="gantt_btn", width="stretch"):
                 st.switch_page("pages/5_Portfolio_Charts.py")
 
     st.markdown("---")
@@ -175,7 +175,7 @@ if any(section3_pages):
             - Inflation and delay modeling
             - Baseline comparison & export capabilities
             """)
-            if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", use_container_width=True):
+            if st.button("📈 Open Cash Flow Simulator", key="cashflow_btn", width="stretch"):
                 st.switch_page("pages/6_Cash_Flow_Simulator.py")
 
     with col2:
@@ -187,7 +187,7 @@ if any(section3_pages):
             - Schedule and cost impact analysis
             - Advanced forecasting tools
             """)
-            if st.button("🎯 Open EVM Simulator", key="evm_btn", use_container_width=True):
+            if st.button("🎯 Open EVM Simulator", key="evm_btn", width="stretch"):
                 st.switch_page("pages/7_EVM_Simulator.py")
 
     st.markdown("---")
@@ -206,7 +206,7 @@ if is_admin(user_email):
         - View user statistics
         - Admin-only access control
         """)
-        if st.button("👥 Open User Management", key="user_mgmt_btn", use_container_width=True):
+        if st.button("👥 Open User Management", key="user_mgmt_btn", width="stretch"):
             st.switch_page("pages/8_User_Management.py")
 
     st.markdown("---")

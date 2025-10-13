@@ -133,7 +133,7 @@ class ResultsDisplayComponent:
         # Display table
         st.dataframe(
             results_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Metric": st.column_config.TextColumn("Metric", width="medium"),
@@ -195,7 +195,7 @@ class ResultsDisplayComponent:
 
         st.dataframe(
             performance_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 

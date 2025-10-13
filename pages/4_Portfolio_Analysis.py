@@ -689,7 +689,7 @@ def main():
             }
         ))
         fig_cpi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_cpi, use_container_width=True)
+        st.plotly_chart(fig_cpi, width="stretch")
     
     with col2:
         # SPI Gauge - Dial with Needle
@@ -719,7 +719,7 @@ def main():
             }
         ))
         fig_spi.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_spi, use_container_width=True)
+        st.plotly_chart(fig_spi, width="stretch")
 
     with col3:
         # % Budget Used (AC/BAC) Gauge - Dial with Needle
@@ -750,7 +750,7 @@ def main():
             }
         ))
         fig_budget_used.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_budget_used, use_container_width=True)
+        st.plotly_chart(fig_budget_used, width="stretch")
 
     with col4:
         # % Earned Value (EV/BAC) Gauge - Dial with Needle
@@ -781,7 +781,7 @@ def main():
             }
         ))
         fig_earned_value.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_earned_value, use_container_width=True)
+        st.plotly_chart(fig_earned_value, width="stretch")
 
     # Project Health Distribution
     col1, col2 = st.columns([1, 1])
@@ -803,7 +803,7 @@ def main():
         )
         fig_health.update_traces(textposition='inside', textinfo='percent+label')
         fig_health.update_layout(height=400)
-        st.plotly_chart(fig_health, use_container_width=True)
+        st.plotly_chart(fig_health, width="stretch")
     
     with col2:
         st.markdown('<div class="section-header">💰 Financial Performance Intelligence</div>', unsafe_allow_html=True)
@@ -836,7 +836,7 @@ def main():
                 title=f'Amount ({currency_symbol}{" " + currency_postfix if currency_postfix else ""})'
             )
         )
-        st.plotly_chart(fig_financial, use_container_width=True)
+        st.plotly_chart(fig_financial, width="stretch")
 
     # Portfolio by Tier Analysis
     st.markdown('<div class="section-header">🎯 Portfolio Distribution</div>', unsafe_allow_html=True)
@@ -865,7 +865,7 @@ def main():
             )
             fig_budget_tier.update_traces(textposition='inside', textinfo='percent+label')
             fig_budget_tier.update_layout(height=400)
-            st.plotly_chart(fig_budget_tier, use_container_width=True)
+            st.plotly_chart(fig_budget_tier, width="stretch")
         else:
             st.info("Budget tier data not available")
 
@@ -891,7 +891,7 @@ def main():
             )
             fig_project_tier.update_traces(textposition='inside', textinfo='percent+label')
             fig_project_tier.update_layout(height=400)
-            st.plotly_chart(fig_project_tier, use_container_width=True)
+            st.plotly_chart(fig_project_tier, width="stretch")
         else:
             st.info("Project tier data not available")
 

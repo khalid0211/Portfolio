@@ -16,7 +16,8 @@
       "Bash(do echo \"=== $file ===\")",
       "Bash(head:*)",
       "Bash(done)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Read(//e/downloads/**)"
     ],
     "deny": [],
     "ask": []
