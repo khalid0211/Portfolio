@@ -34,6 +34,7 @@ except ImportError:
     patches = None
 import streamlit as st
 from dateutil import parser as date_parser
+from utils.auth import check_authentication, require_page_access
 
 # Import utility functions from core.utils (centralized utilities)
 from core.utils import *  # noqa: F401, F403
@@ -83,6 +84,12 @@ st.set_page_config(
     page_icon="📊",
     initial_sidebar_state="expanded"
 )
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('project_analysis', 'Project Analysis')
 
 # Professional CSS styling
 st.markdown("""
@@ -3148,65 +3155,36 @@ def main():
             st.session_state.processed_file_info = None
             st.session_state.session_initialized = True
 
-        # Sidebar configuration
-        with st.sidebar:
-            st.markdown("## ⚙️ Configuration")
+        # Load configuration from session state (set in File Management)
+        controls = st.session_state.config_dict.get('controls', {
+            'curve_type': 'linear',
+            'alpha': 2.0,
+            'beta': 2.0,
+            'currency_symbol': '$',
+            'currency_postfix': '',
+            'date_format': 'YYYY-MM-DD'
+        })
 
-            # Navigation to File Management
-            st.markdown("### 📁 File & Configuration")
-            if st.button("🔧 Open File Management", key="open_file_mgmt", type="primary"):
-                st.switch_page("pages/1_File_Management.py")
+        # Default column mapping for single project analysis
+        column_mapping = {
+            'pid_col': 'Project ID',
+            'pname_col': 'Project',
+            'org_col': 'Organization',
+            'pm_col': 'Project Manager',
+            'bac_col': 'BAC',
+            'ac_col': 'AC',
+            'st_col': 'Plan Start',
+            'fn_col': 'Plan Finish',
+            'cp_col': 'Completion %'
+        }
 
-            st.markdown("---")
+        # Check if batch results are available
+        if st.session_state.get('batch_results_ready'):
+            st.success("✅ Batch calculations completed")
+            st.info("💡 Visit Portfolio Analysis for portfolio-level insights")
 
-            # Load configuration from session state (set in File Management)
-            controls = st.session_state.config_dict.get('controls', {
-                'curve_type': 'linear',
-                'alpha': 2.0,
-                'beta': 2.0,
-                'currency_symbol': '$',
-                'currency_postfix': '',
-                'date_format': 'YYYY-MM-DD'
-            })
-
-            # Default column mapping for single project analysis
-            column_mapping = {
-                'pid_col': 'Project ID',
-                'pname_col': 'Project',
-                'org_col': 'Organization',
-                'pm_col': 'Project Manager',
-                'bac_col': 'BAC',
-                'ac_col': 'AC',
-                'st_col': 'Plan Start',
-                'fn_col': 'Plan Finish',
-                'cp_col': 'Completion %'
-            }
-
-            # Show current configuration status
-            st.markdown("### 📊 Current Configuration")
-
-            # Data status
-            if st.session_state.data_df is not None and not st.session_state.data_df.empty:
-                st.success(f"✅ {len(st.session_state.data_df)} projects loaded")
-            else:
-                st.warning("⚠️ No data loaded")
-
-            # Configuration status
-            if st.session_state.config_dict.get('controls'):
-                st.success(f"✅ {controls.get('curve_type', 'linear')} curve, {controls.get('currency_symbol', '$')} currency")
-            else:
-                st.info("💡 Using default settings")
-
-            # Analysis mode
-            st.info("🔍 Single project analysis mode")
-
-            # Check if batch results are available
-            if st.session_state.get('batch_results_ready'):
-                st.success("✅ Batch calculations completed")
-                st.info("💡 Visit Portfolio Analysis for portfolio-level insights")
-
-            # Only render Help section
-            render_help_section()
+        # Only render Help section
+        render_help_section()
         
         
         # Main content area - prioritize session state data
@@ -3650,10 +3628,14 @@ def main():
         except Exception as e:
             st.error(f"EVM calculation failed: {e}")
             logger.error(f"EVM calculation error: {e}")
-    
+
     except Exception as e:
         st.error(f"An unexpected application error occurred: {e}")
         logger.error(f"Application error: {e}", exc_info=True)
+
+    # Show user info in sidebar
+    from utils.auth import show_user_info_sidebar
+    show_user_info_sidebar()
 
 
 # =============================================================================

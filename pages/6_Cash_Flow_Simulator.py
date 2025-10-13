@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import math
 import plotly.graph_objects as go
+from utils.auth import check_authentication, require_page_access
 
 def calculate_highway_cashflow(budget, duration):
     """Calculate Highway cash flow using a calibrated formula."""
@@ -63,6 +64,12 @@ def calculate_scurve_cashflow(budget, duration, alpha=2, beta=2):
     return monthly_cashflows
 
 st.set_page_config(layout="wide", page_title="Project Delay Financial Impact Simulator")
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('cash_flow_simulator', 'Cash Flow Simulator')
 
 # Initialize session state for baseline functionality
 if 'baseline_data' not in st.session_state:
@@ -717,3 +724,7 @@ if st.session_state.baseline_data is not None:
             with col3:
                 st.metric("Total Comparisons", len(st.session_state.comparison_records))
 
+
+# Show user info in sidebar
+from utils.auth import show_user_info_sidebar
+show_user_info_sidebar()

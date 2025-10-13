@@ -7,14 +7,21 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from utils.auth import check_authentication, require_page_access
 
 # Page configuration
 st.set_page_config(
     page_title="Portfolio Gantt Chart",
-    page_icon="??",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('portfolio_charts', 'Portfolio Charts')
 
 st.markdown("""
 <style>
@@ -2629,3 +2636,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+# Show user info in sidebar
+from utils.auth import show_user_info_sidebar
+show_user_info_sidebar()

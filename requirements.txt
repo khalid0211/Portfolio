@@ -6,3 +6,6 @@ altair
 matplotlib
 openai
 scipy
+firebase-admin
+streamlit-google-auth
+google-auth-oauthlib

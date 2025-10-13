@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
+from utils.auth import check_authentication, require_page_access
 
 # --- Page configuration ---
 st.set_page_config(
@@ -8,6 +9,12 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('evm_simulator', 'EVM Simulator')
 
 # Custom CSS for professional appearance
 st.markdown("""
@@ -596,3 +603,6 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+# Show user info in sidebar
+from utils.auth import show_user_info_sidebar
+show_user_info_sidebar()

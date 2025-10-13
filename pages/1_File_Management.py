@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Any
 import os
 import traceback
+from utils.auth import check_authentication, require_page_access
 
 # Page configuration
 st.set_page_config(
@@ -19,6 +20,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('file_management', 'File Management')
 
 # Note: Some advanced functionality (like database operations)
 # will be handled through session state integration with Portfolio Analysis
@@ -1107,3 +1114,7 @@ with st.expander("ℹ️ File Management Help"):
     - All settings are automatically saved in your session
     - Use JSON export to save complete packages for later use
     """)
+
+# Show user info in sidebar
+from utils.auth import show_user_info_sidebar
+show_user_info_sidebar()

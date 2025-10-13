@@ -12,6 +12,7 @@ warnings.filterwarnings('ignore')
 
 # Import core utilities
 from core.utils import safe_divide
+from utils.auth import check_authentication, require_page_access
 
 # Add pages directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -42,6 +43,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Check authentication and page access
+if not check_authentication():
+    st.stop()
+
+require_page_access('portfolio_analysis', 'Portfolio Analysis')
 
 # Custom CSS for executive styling
 st.markdown("""
@@ -2437,3 +2444,6 @@ Write this report as if you're presenting it to the CEO and Board. They trust yo
 
 if __name__ == "__main__":
     main()
+# Show user info in sidebar
+from utils.auth import show_user_info_sidebar
+show_user_info_sidebar()
