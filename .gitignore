@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 openaikey.txt
 openaikey.txt
+.streamlit/secrets.toml
