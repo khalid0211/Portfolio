@@ -23,27 +23,20 @@ def get_redirect_uri():
     """
     Automatically detect the correct redirect URI based on the environment
     """
-    # Check if running on Streamlit Cloud
-    try:
-        # Streamlit Cloud sets this context
-        if hasattr(st, 'runtime') and st.runtime.exists():
-            # Check if we're on Streamlit Cloud by looking at the hostname
-            import streamlit.web.bootstrap as bootstrap
-            if 'streamlit.app' in str(bootstrap):
-                return "https://portfolio-suite.streamlit.app/"
-    except:
-        pass
+    # First check for explicit environment variable (most reliable)
+    env_uri = os.environ.get("REDIRECT_URI", "")
+    if env_uri:
+        return env_uri
 
-    # Check environment variable or secrets
-    try:
-        custom_uri = st.secrets.get("google_oauth", {}).get("redirect_uri", "")
-        if custom_uri:
-            return custom_uri
-    except:
-        pass
+    # Check if we're on Streamlit Cloud by looking for deployment indicators
+    # Streamlit Cloud typically sets these environment variables
+    is_cloud = (
+        os.environ.get("STREAMLIT_SHARING_MODE") is not None or
+        os.environ.get("HOSTNAME", "").endswith(".streamlit.app") or
+        "streamlit.app" in os.environ.get("STREAMLIT_SERVER_HEADLESS", "")
+    )
 
-    # Check if STREAMLIT_CLOUD environment variable is set
-    if os.environ.get("STREAMLIT_CLOUD", "false").lower() == "true":
+    if is_cloud:
         return "https://portfolio-suite.streamlit.app/"
 
     # Default to localhost for local development
@@ -149,6 +142,11 @@ def check_authentication():
 
     # Show Google Sign-In button
     st.markdown("### Sign in with Google")
+
+    # Debug info - show which redirect URI is being used
+    with st.expander("🔧 Debug Info"):
+        st.code(f"Redirect URI: {REDIRECT_URI}")
+        st.code(f"Environment check:\nSTREAMLIT_SHARING_MODE: {os.environ.get('STREAMLIT_SHARING_MODE', 'Not set')}\nHOSTNAME: {os.environ.get('HOSTNAME', 'Not set')}\nSTREAMLIT_SERVER_HEADLESS: {os.environ.get('STREAMLIT_SERVER_HEADLESS', 'Not set')}")
 
     # Generate OAuth URL
     oauth_params = {
