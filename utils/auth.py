@@ -156,15 +156,32 @@ def check_authentication():
 
     auth_url = f"{AUTHORIZATION_BASE_URL}?{urlencode(oauth_params)}"
 
-    # Display login button - using st.link_button for better compatibility
-    st.link_button(
-        "🔐 Sign in with Google",
-        auth_url,
-        use_container_width=True
-    )
+    # Display login button using JavaScript to handle navigation properly
+    st.markdown(f"""
+    <div style="text-align: left; margin: 20px 0;">
+        <a href="{auth_url}" style="
+            display: inline-block;
+            background-color: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        " onmouseover="this.style.backgroundColor='#357ae8'"
+           onmouseout="this.style.backgroundColor='#4285f4'">
+            🔐 Sign in with Google
+        </a>
+    </div>
 
-    # Alternative: Show direct link
-    st.markdown(f"Or click here: [Sign in with Google]({auth_url})")
+    <script>
+        // Force links to open in parent window, not iframe
+        document.querySelectorAll('a[href*="accounts.google.com"]').forEach(link => {{
+            link.target = '_top';
+        }});
+    </script>
+    """, unsafe_allow_html=True)
 
     return False
 
