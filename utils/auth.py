@@ -67,7 +67,7 @@ def check_authentication():
 
     # Show login page
     st.markdown("# 🔐 Loading Portfolio Management Suite")
-    st.markdown("Authentication complete")
+    st.markdown("Authentication in progress")
 
     # Check if OAuth credentials are configured
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -138,11 +138,6 @@ def check_authentication():
 
     # Show Google Sign-In button
     st.markdown("### Sign in with Google")
-
-    # Debug info - show which redirect URI is being used
-    with st.expander("🔧 Debug Info"):
-        st.code(f"Redirect URI: {REDIRECT_URI}")
-        st.code(f"Environment check:\nSTREAMLIT_SHARING_MODE: {os.environ.get('STREAMLIT_SHARING_MODE', 'Not set')}\nHOSTNAME: {os.environ.get('HOSTNAME', 'Not set')}\nSTREAMLIT_SERVER_HEADLESS: {os.environ.get('STREAMLIT_SERVER_HEADLESS', 'Not set')}")
 
     # Generate OAuth URL
     oauth_params = {
