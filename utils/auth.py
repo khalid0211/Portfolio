@@ -18,31 +18,8 @@ except:
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
-# Dynamic redirect URI - detects if running on Streamlit Cloud or locally
-def get_redirect_uri():
-    """
-    Automatically detect the correct redirect URI based on the environment
-    """
-    # First check for explicit environment variable (most reliable)
-    env_uri = os.environ.get("REDIRECT_URI", "")
-    if env_uri:
-        return env_uri
-
-    # Check if we're on Streamlit Cloud by looking for deployment indicators
-    # Streamlit Cloud typically sets these environment variables
-    is_cloud = (
-        os.environ.get("STREAMLIT_SHARING_MODE") is not None or
-        os.environ.get("HOSTNAME", "").endswith(".streamlit.app") or
-        "streamlit.app" in os.environ.get("STREAMLIT_SERVER_HEADLESS", "")
-    )
-
-    if is_cloud:
-        return "https://portfolio-suite.streamlit.app/"
-
-    # Default to localhost for local development
-    return "http://localhost:8501"
-
-REDIRECT_URI = get_redirect_uri()
+# This will be set dynamically in check_authentication()
+REDIRECT_URI = None
 
 # Google OAuth endpoints
 AUTHORIZATION_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -55,6 +32,25 @@ def check_authentication():
     Check if user is authenticated using Google OAuth
     Returns True if authenticated, False otherwise
     """
+    global REDIRECT_URI
+
+    # Dynamically detect redirect URI based on current URL
+    if REDIRECT_URI is None:
+        # Try to get the current URL from Streamlit's context
+        try:
+            # Check environment variable first
+            env_uri = os.environ.get("REDIRECT_URI", "")
+            if env_uri:
+                REDIRECT_URI = env_uri
+            # Check if hostname indicates Streamlit Cloud
+            elif os.environ.get("HOSTNAME") == "streamlit":
+                REDIRECT_URI = "https://portfolio-suite.streamlit.app/"
+            else:
+                # Default to localhost
+                REDIRECT_URI = "http://localhost:8501"
+        except:
+            REDIRECT_URI = "http://localhost:8501"
+
     # Initialize session state for authentication
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
