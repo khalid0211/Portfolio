@@ -13,12 +13,43 @@ import requests
 try:
     GOOGLE_CLIENT_ID = st.secrets.get("google_oauth", {}).get("client_id", "")
     GOOGLE_CLIENT_SECRET = st.secrets.get("google_oauth", {}).get("client_secret", "")
-    REDIRECT_URI = st.secrets.get("google_oauth", {}).get("redirect_uri", "http://localhost:8501")
 except:
     # Fallback to environment variables
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-    REDIRECT_URI = os.environ.get("REDIRECT_URI", "http://localhost:8501")
+
+# Dynamic redirect URI - detects if running on Streamlit Cloud or locally
+def get_redirect_uri():
+    """
+    Automatically detect the correct redirect URI based on the environment
+    """
+    # Check if running on Streamlit Cloud
+    try:
+        # Streamlit Cloud sets this context
+        if hasattr(st, 'runtime') and st.runtime.exists():
+            # Check if we're on Streamlit Cloud by looking at the hostname
+            import streamlit.web.bootstrap as bootstrap
+            if 'streamlit.app' in str(bootstrap):
+                return "https://portfolio-suite.streamlit.app/"
+    except:
+        pass
+
+    # Check environment variable or secrets
+    try:
+        custom_uri = st.secrets.get("google_oauth", {}).get("redirect_uri", "")
+        if custom_uri:
+            return custom_uri
+    except:
+        pass
+
+    # Check if STREAMLIT_CLOUD environment variable is set
+    if os.environ.get("STREAMLIT_CLOUD", "false").lower() == "true":
+        return "https://portfolio-suite.streamlit.app/"
+
+    # Default to localhost for local development
+    return "http://localhost:8501"
+
+REDIRECT_URI = get_redirect_uri()
 
 # Google OAuth endpoints
 AUTHORIZATION_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
